@@ -315,11 +315,11 @@ void printGNGGA(NMEA_GGA_data_t *nmeaData){
 void txReadyISR() {
   if(debug){Serial.println("txReady ISR!");}
 
-  if (myGNSS.getRXMRAWX()){
-    convertRAWX(&myGNSS.packetUBXRXMRAWX->data);
-  }
-  Serial.println(myGNSS.fileBufferSpaceAvailable());
-  myGNSS.storePacket(UBX_RXM_RAWX_data_t *msg);
+  // if (myGNSS.getRXMRAWX()){
+  //   convertRAWX(&myGNSS.packetUBXRXMRAWX->data);
+  // }
+  // Serial.println(myGNSS.fileBufferSpaceAvailable());
+  // myGNSS.storePacket(UBX_RXM_RAWX_data_t *msg);
   // We should use this as a buffer to write raw data to the SD card or to read in a UBX-RAWX message
 
   // _____________________________________________________________________________________
@@ -350,52 +350,53 @@ void txReadyISR() {
 //   }
 // }
 
-void convertRAWX(UBX_RXM_RAWX_data_t *datastruct){
-  Serial.println("Here is the num of measurements: ");
-  Serial.print(datastruct->header.numMeas);
-}
+// void convertRAWX(UBX_RXM_RAWX_data_t *datastruct){
+//   Serial.println("Here is the num of measurements: ");
+//   Serial.print(datastruct->header.numMeas);
+// }
 
-void printRAWX(UBX_RXM_RAWX_data_t *ubxDataStruct)
-{
-  Serial.println();
+// void printRAWX(UBX_RXM_RAWX_data_t *ubxDataStruct)
+// {
+//   Serial.println();
 
-  Serial.print(F("New RAWX data received. It contains "));
-  Serial.print(ubxDataStruct->header.numMeas); // Print numMeas (Number of measurements / blocks)
-  Serial.println(F(" data blocks:"));
+//   Serial.print(F("New RAWX data received. It contains "));
+//   Serial.print(ubxDataStruct->header.numMeas); // Print numMeas (Number of measurements / blocks)
+//   Serial.println(F(" data blocks:"));
 
-  for (uint8_t block = 0; block < ubxDataStruct->header.numMeas; block++) // For each block
-  {
-    Serial.print(F("GNSS ID: "));
-    if (ubxDataStruct->blocks[block].gnssId < 100) Serial.print(F(" ")); // Align the gnssId
-    if (ubxDataStruct->blocks[block].gnssId < 10) Serial.print(F(" ")); // Align the gnssId
-    Serial.print(ubxDataStruct->blocks[block].gnssId);
-    Serial.print(F("  SV ID: "));
-    if (ubxDataStruct->blocks[block].svId < 100) Serial.print(F(" ")); // Align the svId
-    if (ubxDataStruct->blocks[block].svId < 10) Serial.print(F(" ")); // Align the svId
-    Serial.print(ubxDataStruct->blocks[block].svId);
+//   for (uint8_t block = 0; block < ubxDataStruct->header.numMeas; block++) // For each block
+//   {
+//     Serial.print(F("GNSS ID: "));
+//     if (ubxDataStruct->blocks[block].gnssId < 100) Serial.print(F(" ")); // Align the gnssId
+//     if (ubxDataStruct->blocks[block].gnssId < 10) Serial.print(F(" ")); // Align the gnssId
+//     Serial.print(ubxDataStruct->blocks[block].gnssId);
+//     Serial.print(F("  SV ID: "));
+//     if (ubxDataStruct->blocks[block].svId < 100) Serial.print(F(" ")); // Align the svId
+//     if (ubxDataStruct->blocks[block].svId < 10) Serial.print(F(" ")); // Align the svId
+//     Serial.print(ubxDataStruct->blocks[block].svId);
 
-    if (sizeof(double) == 8) // Check if our processor supports 64-bit double
-    {
-      // Convert prMes from uint8_t[8] to 64-bit double
-      // prMes is little-endian
-      double pseudorange;
-      memcpy(&pseudorange, &ubxDataStruct->blocks[block].prMes, 8);
-      Serial.print(F("  PR: "));
-      Serial.print(pseudorange, 3);
+//     if (sizeof(double) == 8) // Check if our processor supports 64-bit double
+//     {
+//       // Convert prMes from uint8_t[8] to 64-bit double
+//       // prMes is little-endian
+//       double pseudorange;
+//       memcpy(&pseudorange, &ubxDataStruct->blocks[block].prMes, 8);
+//       Serial.print(F("  PR: "));
+//       Serial.print(pseudorange, 3);
 
-      // Convert cpMes from uint8_t[8] to 64-bit double
-      // cpMes is little-endian
-      double carrierPhase;
-      memcpy(&carrierPhase, &ubxDataStruct->blocks[block].cpMes, 8);
-      Serial.print(F(" m  CP: "));
-      Serial.print(carrierPhase, 3);
-      Serial.print(F(" cycles LeapSec: "));
-    }
-    Serial.println();
-    Serial.println();
-    Serial.print(ubxDataStruct->blocks[block])
-    Serial.println();
-  }
+//       // Convert cpMes from uint8_t[8] to 64-bit double
+//       // cpMes is little-endian
+//       double carrierPhase;
+//       memcpy(&carrierPhase, &ubxDataStruct->blocks[block].cpMes, 8);
+//       Serial.print(F(" m  CP: "));
+//       Serial.print(carrierPhase, 3);
+//       Serial.print(F(" cycles LeapSec: "));
+//     }
+//     Serial.println();
+//     Serial.println();
+//     Serial.print(ubxDataStruct->blocks[block])
+//     Serial.println();
+//   }
+// }
 
 void SendGPSconfiguration() {
   // Through expirimentation, ublox M8P only listens to about 100 bytes per transmission
