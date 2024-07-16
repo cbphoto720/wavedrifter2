@@ -74,6 +74,9 @@
 - Wave-detect transmission
 	look at IMU data to detect a wave, use wave as an opportunity to transmit/look for GPS from a taller height off the water
 # Componets
+
+# VHB tape
+0.4" x 0.025" (10.16 x 0.635 mm)
 ## GPS
 **glonass**
 - 1598-1604 MHz
