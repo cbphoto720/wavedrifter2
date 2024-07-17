@@ -2,24 +2,24 @@
 # WIP
 - [x]  cut the red wire inside one of your microUSB cables.  Use jumpers and power supply to spin up the box
 - RFM69 should be power by teensy onboard 3V supply (Likely cleaner than the FlipFlop board)
-- Internal mounts is just slightly too tall.  take off 0.5 or 1mm and include a cutout for the Teensy 4.0 backing SMD electronics.
-- expiriment with a centering rectangular cutout for the M8P board
-- add mounts for Status LED, Recovery LED, Buzzer
-- [RAWX message structure](https://docs.ros.org/en/noetic/api/ublox_msgs/html/msg/RxmRAWX.html)
-- u-center M8P config
+- [x]  Internal mounts is just slightly too tall.  take off 0.5 or 1mm and include a cutout for the Teensy 4.0 backing SMD electronics.
+- [ ] expiriment with a centering rectangular cutout for the M8P board
+- [ ] add mounts for Status LED, Recovery LED, Buzzer
+- [ ] [RAWX message structure](https://docs.ros.org/en/noetic/api/ublox_msgs/html/msg/RxmRAWX.html)
+- [ ] u-center M8P config
 	Only output NEMA strings and RAWX data
 	[10Hz U-blox binary GPS data in 66 lines of code (arduino)](https://www.youtube.com/watch?v=TwhCX0c8Xe0&t=0s)
 	save configuration so that it can be uploaded to each board.  (have arduino read a ublox startup file???  That would be the cleanest way to ensure the boards are config ready)
 	then work on arduino parsing of the hex binary
-- Interrupt based programming routine so that you know when the buffer is being used!  (dont want to have another message write over the buffer before you read it!)
+- [ ] Interrupt based programming routine so that you know when the buffer is being used!  (dont want to have another message write over the buffer before you read it!)
 	have a routine handle the interupt code before returning to what you are doing.
 	- look up simple arduino examples of interupts
-- [RFM69HCW datasheet](https://cdn.sparkfun.com/datasheets/Wireless/General/RFM69HCW-V1.1.pdf) Page 48 describes DIO mapping in order to select what type of interrupt you would like to know about the buffer.  This is useful for Interrupt routines to handle saving the data
+- [ ] [RFM69HCW datasheet](https://cdn.sparkfun.com/datasheets/Wireless/General/RFM69HCW-V1.1.pdf) Page 48 describes DIO mapping in order to select what type of interrupt you would like to know about the buffer.  This is useful for Interrupt routines to handle saving the data
 
 
 - [ ] Write code to test RFM 
-- test broadcast with different drifter SG & range
-- Another test of speed by broadcasting IMU data live
+- [ ] test broadcast with different drifter SG & range
+- [ ] Another test of speed by broadcasting IMU data live
 - [x] Do not work on HousingMounts until you finalize what electronics you need.  (3d printed inside)
 	top of battery can sit 16mm from the top of 2-140_UP internalring.
 	O-ring crossed & stretched 10mm from top of arduino board
@@ -58,10 +58,7 @@
 - [x] Power solution for M8P + transmitting mssg (current draw getting close to 250 mA)
 	- [x] power M8P through USB connector if needed (tap directly into battery through hall effect sensor switch board)
 ##### FIXME
-- [ ] compliant clip tolerance too tight at back of GPSmount V1
-- [ ] Coax clearance for GPS mount 3
-- [ ] bolts too short for GPSmount3 + internals board.  move GPSmount to have built in standoffs 
-- [ ] 
+
 
 # Ideas
 **Transciever ideas**
