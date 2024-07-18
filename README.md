@@ -1,5 +1,14 @@
 # Funding ends in **JUNE**
 # WIP
+- [x] solder recovery LED to test on breadboard
+- [ ] recovery LED mounting position
+- [ ] design new GPS antenna mount
+- [ ] 3DP new internalmounts 5.1
+- [ ] Manufacture drifter2.1
+- [ ] bouyancy test
+
+
+
 - [x]  cut the red wire inside one of your microUSB cables.  Use jumpers and power supply to spin up the box
 - RFM69 should be power by teensy onboard 3V supply (Likely cleaner than the FlipFlop board)
 - [x]  Internal mounts is just slightly too tall.  take off 0.5 or 1mm and include a cutout for the Teensy 4.0 backing SMD electronics.
