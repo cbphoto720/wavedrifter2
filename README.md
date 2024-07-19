@@ -2,23 +2,28 @@
 # WIP
 - [x] solder recovery LED to test on breadboard
 - [ ] more clearance for coin cell bat on sparkfun M8P board
-- [ ] post photos and write assembly guide
-- [ ] design power/signal delivery pcb as a hat for teensy to make connections easier
-- [ ] recovery LED mounting position
-- [ ] design new GPS antenna mount
 - [ ] 3DP new internalmounts 5.1
 - [ ] Manufacture drifter2.1 (x2)
-- [ ] bouyancy test of drifter2.0
+- [ ] post photos and write assembly guide
 
+# Tests
+- [ ] buoyancy test of drifter2.0
+- [ ] buoyancy test of drifter2.1
+- [ ] GPS underwater test
+- [ ] RFM underwater test
 
-
+# Nice-to-haves
+- [ ]  design power/signal delivery pcb as a hat for teensy to make connections easier
+- [ ] design new GPS antenna mount
+- [ ] stronger mounting of IMU
+- [ ] recovery LED mounting position
+____
 - [x]  cut the red wire inside one of your microUSB cables.  Use jumpers and power supply to spin up the box
 - RFM69 should be power by teensy onboard 3V supply (Likely cleaner than the FlipFlop board)
 - [x]  Internal mounts is just slightly too tall.  take off 0.5 or 1mm and include a cutout for the Teensy 4.0 backing SMD electronics.
-- [ ] expiriment with a centering rectangular cutout for the M8P board
 - [ ] add mounts for Status LED, Recovery LED, Buzzer
 - [ ] [RAWX message structure](https://docs.ros.org/en/noetic/api/ublox_msgs/html/msg/RxmRAWX.html)
-- [ ] u-center M8P config
+- [x] u-center M8P config
 	Only output NEMA strings and RAWX data
 	[10Hz U-blox binary GPS data in 66 lines of code (arduino)](https://www.youtube.com/watch?v=TwhCX0c8Xe0&t=0s)
 	save configuration so that it can be uploaded to each board.  (have arduino read a ublox startup file???  That would be the cleanest way to ensure the boards are config ready)
