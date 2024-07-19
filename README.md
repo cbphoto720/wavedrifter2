@@ -4,8 +4,8 @@
 - [ ] recovery LED mounting position
 - [ ] design new GPS antenna mount
 - [ ] 3DP new internalmounts 5.1
-- [ ] Manufacture drifter2.1
-- [ ] bouyancy test
+- [ ] Manufacture drifter2.1 (x2)
+- [ ] bouyancy test of drifter2.0
 
 
 
