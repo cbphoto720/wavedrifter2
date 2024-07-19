@@ -1,6 +1,9 @@
 # Funding ends in **JUNE**
 # WIP
 - [x] solder recovery LED to test on breadboard
+- [ ] more clearance for coin cell bat on sparkfun M8P board
+- [ ] post photos and write assembly guide
+- [ ] design power/signal delivery pcb as a hat for teensy to make connections easier
 - [ ] recovery LED mounting position
 - [ ] design new GPS antenna mount
 - [ ] 3DP new internalmounts 5.1
