@@ -275,6 +275,7 @@ void initGPS(){
   SendGPSconfiguration(); // Use Binary to send a bunch of configurations to the M8P
   myGNSS.disableUBX7Fcheck(); // RAWX data can legitimately contain 0x7F, so we need to disable the "7F" check in checkUbloxI2C
   myGNSS.setNMEAGNGGAcallbackPtr(&printGNGGA); // Function to run when NMEA GNGGA data is received
+  myGNSS.setAutoRXMRAWXcallback(&printRAWX);
 
   //Save settings to flash and BBR on the M8P module
   if(!myGNSS.saveConfiguration()){
@@ -283,6 +284,18 @@ void initGPS(){
   }
   else{
     Serial.println("SUCCESS: [GPS] saved configuration");
+  }
+}
+
+void printRAWX(UBX_RXM_RAWX_data_t rawxData){
+  Serial.print(F("\r\nRAWX: Length: "));
+  Serial.print(rawxData.header.numMeas); 
+
+  if (rawxData.header.numMeas > 0) {
+    double prMesValue;
+    memcpy(&prMesValue, rawxData.blocks[0].prMes, sizeof(prMesValue));
+    Serial.print(F("\r\nBlock 0 prMes: "));
+    Serial.println(prMesValue, 6); // Print with 6 decimal places
   }
 }
 
