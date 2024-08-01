@@ -22,7 +22,7 @@ bool debug = true; //DEBUG: TRUE enables Serial messages and extra data.
 // #define PoluluSD // Define MicroSD
 
 /* drifter identification number */
-const int drifterNumber = 1; // My node ID (0 to 255)
+const int drifterNumber = 1; // My node ID (1 to 254) (0 reserved for BASE STATION) (255 reserved for broadcast RFM)
 int filenumber=1;
 char IMUfilename[24];
 char GPSfilename[24];
@@ -85,9 +85,9 @@ char buf[100] = {'\0'}; //DEBUG - sprinf needs a buffer char to store data!  fig
   #define MYNODEID      drifterNumber   // My node ID (0 to 255)
   #define BASEID      0   // Destination node ID (0 to 254, 255 = broadcast)
   #define MY_RF69_IRQ_PIN 8
+  #define MY_RF69_SPI_CS 21
   #define FREQUENCY     RF69_915MHZ
   #define ENCRYPTKEY    "FILEDCREW1234567" // Use the same 16-byte key on all nodes
-  #define IS_RFM69HW_HCW // Version of the transceiver
   // optional configs
   #define USEACK        true // Request ACKs or not
   #define ENABLE_ATC  //comment out this line to disable AUTO TRANSMISSION CONTROL
@@ -97,9 +97,9 @@ char buf[100] = {'\0'}; //DEBUG - sprinf needs a buffer char to store data!  fig
   };
 
   #ifdef ENABLE_ATC
-  RFM69_ATC radio(RF69_SPI_CS,MY_RF69_IRQ_PIN);
+  RFM69_ATC radio(MY_RF69_SPI_CS,MY_RF69_IRQ_PIN);
   #else
-  RFM69 radio(RF69_SPI_CS,MY_RF69_IRQ_PIN);
+  RFM69 radio(MY_RF69_SPI_CS,MY_RF69_IRQ_PIN);
   #endif
 #endif
 
@@ -108,7 +108,7 @@ const int LED_pin = 22;
 // bool switchState = true;
 
 /* Buzz setup */
-const int BUZZ_pin = 15;
+const int BUZZ_pin = 1; //Drifter V2 = 15
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
  *                                IMU CODE Pimoroni
@@ -300,16 +300,33 @@ void printRAWX(UBX_RXM_RAWX_data_t rawxData){
 }
 
 void printGNGGA(NMEA_GGA_data_t *nmeaData){
-  Serial.print(F("\r\nGNGGA: Length: "));
-  Serial.print(nmeaData->length);
-  Serial.print(F("\tData: "));
-  Serial.print((const char *)nmeaData->nmea); // .nmea is printable (NULL-terminated) and already has \r\n on the end
+  //FLAG [SPEED] print NMEA to SD every 250ms.  You might need to cache a few as buffer to save power/compute time
+  #ifdef PoluluSD //check that SD card is enabled
+    myfile = SD.open(GPSfilename, FILE_WRITE);
+    if(myfile){
+      myfile.println((const char *)nmeaData->nmea);
+    }
+    else{
+      Serial.print("ERROR: unable to open file: ");
+      Serial.println(GPSfilename);
+      // while(1); //ERROR - Freeze and stop program from continuing
+    }
+    myfile.close();
+  #endif
+  
+  // Print out full NMEA on serial
+  if(debug){
+    Serial.print(F("\r\nGNGGA: Length: "));
+    Serial.print(nmeaData->length);
+    Serial.print(F("\tData: "));
+    Serial.print((const char *)nmeaData->nmea); // .nmea is printable (NULL-terminated) and already has \r\n on the end
+  }
 
+  // use microNMEA to parse NMEA string in order to pull out Lat/Lon/ UTC time
   bool process= false;
   for (int i = 0; nmeaData->nmea[i] != '\n'; i++) {
     process=nmea.process((char)nmeaData->nmea[i]);
   }
-
   if(process){
     Serial.print("Valid fix: ");
     Serial.println(nmea.isValid() ? "yes" : "no");
@@ -326,90 +343,9 @@ void printGNGGA(NMEA_GGA_data_t *nmeaData){
 
 /// ISR for reading the data off the Sparkfun board
 void txReadyISR() {
+  //FLAG 
   if(debug){Serial.println("txReady ISR!");}
-
-  // if (myGNSS.getRXMRAWX()){
-  //   convertRAWX(&myGNSS.packetUBXRXMRAWX->data);
-  // }
-  // Serial.println(myGNSS.fileBufferSpaceAvailable());
-  // myGNSS.storePacket(UBX_RXM_RAWX_data_t *msg);
-  // We should use this as a buffer to write raw data to the SD card or to read in a UBX-RAWX message
-
-  // _____________________________________________________________________________________
-
-  // //FLAG: modifying DataLoggingExample4_RXM_without_Callbacks from Sparkfun examples
-
-  // while(myGNSS.fileBufferAvailable() >= 40) // Check to see if we are ready to write a block to SD card //FLAG: Hard coded write to SD card every 40 bytes
-  // {
-  //   if(debug){Serial.println("[GPS] txReady: fileBufferavailable");}
-  //   myGNSS.extractFileBufferData(GPSbuffer, 40); // Extract exactly packetLength bytes from the UBX file buffer and put them into myBuffer
-    
-  //   // myfile.write(GPSbuffer, 40); // Write exactly packetLength bytes from myBuffer to the ubxDataFile on the SD card
-  //   for(size_t i=0; i<sizeof(GPSbuffer); i++){
-  //     Serial.println(GPSbuffer[i]); //FLAG
-  //   }
-  
-  //   myGNSS.checkUblox();
-
-  //   //printBuffer(myBuffer); // Uncomment this line to print the data as Hexadecimal bytes
-  // }
 }
-
-// void calcChecksum(unsigned char* CK){
-//   memset(CK, 0, 2);
-//   for(int i = 0; i < (int)sizeof(NMEA_GNGGA); i++){
-//     CK[0] += ((unsigned char*)(&GPSstruct))[i];
-//     CK[1] =+ CK[0];
-//   }
-// }
-
-// void convertRAWX(UBX_RXM_RAWX_data_t *datastruct){
-//   Serial.println("Here is the num of measurements: ");
-//   Serial.print(datastruct->header.numMeas);
-// }
-
-// void printRAWX(UBX_RXM_RAWX_data_t *ubxDataStruct)
-// {
-//   Serial.println();
-
-//   Serial.print(F("New RAWX data received. It contains "));
-//   Serial.print(ubxDataStruct->header.numMeas); // Print numMeas (Number of measurements / blocks)
-//   Serial.println(F(" data blocks:"));
-
-//   for (uint8_t block = 0; block < ubxDataStruct->header.numMeas; block++) // For each block
-//   {
-//     Serial.print(F("GNSS ID: "));
-//     if (ubxDataStruct->blocks[block].gnssId < 100) Serial.print(F(" ")); // Align the gnssId
-//     if (ubxDataStruct->blocks[block].gnssId < 10) Serial.print(F(" ")); // Align the gnssId
-//     Serial.print(ubxDataStruct->blocks[block].gnssId);
-//     Serial.print(F("  SV ID: "));
-//     if (ubxDataStruct->blocks[block].svId < 100) Serial.print(F(" ")); // Align the svId
-//     if (ubxDataStruct->blocks[block].svId < 10) Serial.print(F(" ")); // Align the svId
-//     Serial.print(ubxDataStruct->blocks[block].svId);
-
-//     if (sizeof(double) == 8) // Check if our processor supports 64-bit double
-//     {
-//       // Convert prMes from uint8_t[8] to 64-bit double
-//       // prMes is little-endian
-//       double pseudorange;
-//       memcpy(&pseudorange, &ubxDataStruct->blocks[block].prMes, 8);
-//       Serial.print(F("  PR: "));
-//       Serial.print(pseudorange, 3);
-
-//       // Convert cpMes from uint8_t[8] to 64-bit double
-//       // cpMes is little-endian
-//       double carrierPhase;
-//       memcpy(&carrierPhase, &ubxDataStruct->blocks[block].cpMes, 8);
-//       Serial.print(F(" m  CP: "));
-//       Serial.print(carrierPhase, 3);
-//       Serial.print(F(" cycles LeapSec: "));
-//     }
-//     Serial.println();
-//     Serial.println();
-//     Serial.print(ubxDataStruct->blocks[block])
-//     Serial.println();
-//   }
-// }
 
 void SendGPSconfiguration() {
   // Through expirimentation, ublox M8P only listens to about 100 bytes per transmission
@@ -484,13 +420,25 @@ void initRFM(){
   } else{
     Serial.println("RFM initialized");
   }
+  radio.setHighPower(); //always set high power for HCW varient
   radio.encrypt(ENCRYPTKEY);
-  #ifdef IS_RFM69HW_HCW
-    radio.setHighPower(); //must include this only for RFM69HW/HCW!
-  #endif
+
   #ifdef ENABLE_ATC
     radio.enableAutoPower(ATC_RSSI);
   #endif 
+  
+  //FLAG this is a simple test startup.  Include more startup info like bat voltage, device mode, etc
+  sprintf(sendbuffer,"$SIO Drifter%01d reboot", drifterNumber); // sendlength 22 long
+  if (USEACK){
+    if (radio.sendWithRetry(BASEID, sendbuffer, sizeof(sendbuffer), 10))
+      Serial.println("Coms established with base");
+    else
+      Serial.println("ERROR: unable to establish coms to Base");
+  }
+  else{
+    // If you don't need acknowledgements, just use send():
+    radio.send(TONODEID, sendbuffer, sizeof(sendbuffer));
+  }
 }
 #endif
 
@@ -639,9 +587,11 @@ void loop() {
   // put your main code here, to run repeatedly:
   currentTime = millis();
 
+#ifdef SparkfunGPS
   myGNSS.checkUblox(); // Check for the arrival of new data and process it.
   myGNSS.checkCallbacks(); // Check if any callbacks are waiting to be processed.
   delay(50);
+#endif
 
   // Log IMU data
   #ifdef PIMARONI
