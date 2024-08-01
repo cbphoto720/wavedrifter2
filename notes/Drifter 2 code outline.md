@@ -1,8 +1,3 @@
--reporting requirements for drifter cost
-- send falk bullet points itemizing the upgrades to the 2.0 drifter version vs the 1st
-- magnet on/off switch
-- photo of new drifter 
-
 ### SPI
 - microsd
 - Transceiver
@@ -11,17 +6,24 @@
 - GPS
 ##### Key
 //WIP - Things to fix!
+//FLAG - Important note
 //DEBUG - useful for problem solving
 //BLINK - good spots to communicate to user what is happening
 //OFF - places where the program should shut down (may be able to reset with Flip-Flop board)
 //ERROR - places where an error should be thrown
-//SPEED
 
 
 # WIP
 - [x] use struct NMEA_GNGGA to parse data ([follow this tutorial](https://www.youtube.com/watch?v=ylxwOg2pXrc&t=0s)) and then broadcast valid fix lat/lon to base
 - [ ] find a way to interally store RAWX in M8P LOG file before writing to SD card
+	- [ ] exactly what data needs to be written to the card.  Is it the full RAWX binary every time or can we slim it down?
 - [ ] broadcast from 915 mHz
+	- why can it read transmissions but not ACK or Broadcast on its own?
+- [ ]  Log data to microsd
+	- [ ] IMU data format
+	- [ ] GPS NMEA strings
+- [ ] voltage divider to activate Recovery mode
+- [ ] receive messages from BASE to activate other sampling modes
 
 **SD_ReadWrite_example3**
 - Working prototype of reading/writing data

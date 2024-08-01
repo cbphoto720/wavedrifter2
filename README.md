@@ -1,9 +1,9 @@
-# Funding ends in **JUNE**
 # WIP
 - [x] solder recovery LED to test on breadboard
-- [ ] more clearance for coin cell bat on sparkfun M8P board
-- [ ] 3DP new internalmounts 5.1
-- [ ] Manufacture drifter2.1 (x2)
+- [x] more clearance for coin cell bat on sparkfun M8P board
+- [ ] voltage divider to measure battery life
+- [ ] 3DP new internalmounts 5.2
+- [ ] Manufacture drifter2.1
 - [ ] post photos and write assembly guide
 
 # Tests
@@ -11,7 +11,6 @@
 - [ ] buoyancy test of drifter2.1
 - [ ] GPS underwater test
 - [ ] RFM underwater test
-
 # Nice-to-haves
 - [ ]  design power/signal delivery pcb as a hat for teensy to make connections easier
 - [ ] design new GPS antenna mount
