@@ -1,6 +1,8 @@
 # WIP
 - [x] solder recovery LED to test on breadboard
 - [x] more clearance for coin cell bat on sparkfun M8P board
+- [ ] FIGURE OUT GPS/ICM CONNECTION ISSUES
+- [ ] BE CAREFUL USING RECOVERY LED AS SIGNAL LED (could draw too much current if PWM doesn't work)
 - [ ] voltage divider to measure battery life
 - [ ] 3DP new internalmounts 5.2
 - [ ] Manufacture drifter2.1

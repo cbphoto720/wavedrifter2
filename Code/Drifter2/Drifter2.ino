@@ -18,14 +18,14 @@
 bool debug = true; //DEBUG: TRUE enables Serial messages and extra data.
 // #define PIMARONI // Define IMU
 #define SparkfunGPS // Define GPS
-// #define SparkfunRFM // Define RFM
+//#define SparkfunRFM // Define RFM
 // #define PoluluSD // Define MicroSD
 
 /* drifter identification number */
 const int drifterNumber = 1; // My node ID (1 to 254) (0 reserved for BASE STATION) (255 reserved for broadcast RFM)
 int filenumber=1;
-char IMUfilename[24];
-char GPSfilename[24];
+char IMUfilename[33];
+char GPSfilename[33];
 
 /*global variables*/
 float VOLTAGE = 0; // Battery voltage (V)
@@ -78,8 +78,8 @@ char buf[100] = {'\0'}; //DEBUG - sprinf needs a buffer char to store data!  fig
 #ifdef SparkfunRFM
   #include <RFM69.h>
   #include <RFM69_ATC.h>
-  char sendbuffer[62];
-  int sendlength = 0;
+  char sendbuffer[60]; // 62 bytes is max transmission size
+  int sendlength = 0; // = sizeof(sendbuffer)
 
   #define NETWORKID     10   // Must be the same for all nodes (0 to 255)
   #define MYNODEID      drifterNumber   // My node ID (0 to 255)
@@ -106,6 +106,7 @@ char buf[100] = {'\0'}; //DEBUG - sprinf needs a buffer char to store data!  fig
 /* Led setup */
 const int LED_pin = 22;
 // bool switchState = true;
+const int recoveryLED_pin = 6;
 
 /* Buzz setup */
 const int BUZZ_pin = 1; //Drifter V2 = 15
@@ -437,7 +438,7 @@ void initRFM(){
   }
   else{
     // If you don't need acknowledgements, just use send():
-    radio.send(TONODEID, sendbuffer, sizeof(sendbuffer));
+    radio.send(BASEID, sendbuffer, sizeof(sendbuffer));
   }
 }
 #endif
@@ -472,13 +473,23 @@ void initfiles(){
   // Create a unique IMU and GPS log and write a header to the file.
   // Determine next filename
   Serial.println("Initializing datalog files");
-  sprintf(IMUfilename, "Drifter%01d_IMUlog%03d.txt" , drifterNumber, filenumber); // Pair all sensor logs to IMU file numbering system
+  snprintf(IMUfilename, sizeof(IMUfilename), "Drifter%03d_IMUlog%03d.txt" , drifterNumber, filenumber); // Pair all sensor logs to IMU file numbering system
+  Serial.print("initial filename: "); //DEBUG
+  Serial.println(IMUfilename); //DEBUG
   while(SD.exists(IMUfilename)){
     filenumber++;
-    sprintf(IMUfilename, "Drifter%01d_IMUlog%03d.txt" , drifterNumber, filenumber);
+    snprintf(IMUfilename, sizeof(IMUfilename), "Drifter%03d_IMUlog%03d.txt" , drifterNumber, filenumber);
+    Serial.println(IMUfilename); //DEBUG
   }
-  sprintf(IMUfilename, "Drifter%01d_IMUlog%03d.txt" , drifterNumber, filenumber); //Use new log# if others exist
-  sprintf(GPSfilename, "Drifter%01d_GPSlog%03d.txt" , drifterNumber, filenumber); //Pair GPS file to IMUfile log#
+  Serial.print("     FINAL filename: "); //DEBUG
+  Serial.println(IMUfilename); //DEBUG
+  snprintf(IMUfilename, sizeof(IMUfilename), "Drifter%03d_IMUlog%03d.txt" , drifterNumber, filenumber); //Use new log# if others exist
+  snprintf(GPSfilename, sizeof(GPSfilename), "Drifter%03d_GPSlog%03d.txt" , drifterNumber, filenumber); //Pair GPS file to IMUfile log#
+
+  myfile = SD.open(IMUfilename, FILE_WRITE); // create the file
+  myfile.close();
+  myfile = SD.open(GPSfilename, FILE_WRITE); // create the file
+  myfile.close();
   
   // Write header to IMUfile
   #ifdef Pimoroni
@@ -524,19 +535,21 @@ void initfiles(){
 
   Serial.println("");
   Serial.println("SD card is ready to log data.");
+  #endif
 }
-#endif
 #endif
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
  *                                            SETUP
  * ----------------- ------------------ ------------------ ------------------ ------------------*/
 void setup() {
-  Wire.begin(UbloxM8P_ADDR); //FLAG [GPS] testing
   Serial.begin(115200);
   while(!Serial){
     delay(20);
-  }
+  }  
+  #ifdef SparkfunGPS
+    Wire.begin(UbloxM8P_ADDR); //FLAG [GPS] testing
+  #endif
 
   Serial.println(" ");
   Serial.println("~ ~ ~ ~ ~ REBOOT ~ ~ ~ ~ ~");
@@ -548,6 +561,7 @@ void setup() {
 */
   pinMode(BUZZ_pin, OUTPUT);
   pinMode(LED_pin, OUTPUT);
+  pinMode(recoveryLED_pin, OUTPUT);
   #ifdef PIMARONI 
     initIMU();
     calibrateIMU();
@@ -564,20 +578,33 @@ void setup() {
   #endif
 
   // Startup sound (data is now logging)
+  digitalWrite(LED_pin, HIGH);
+  analogWrite(recoveryLED_pin, 10);
   tone(BUZZ_pin, 800);
   delay(75);
+  noTone(BUZZ_pin);
+  delay(50);
   tone(BUZZ_pin, 1200);
   delay(75);
+  noTone(BUZZ_pin);
+  delay(50);
   tone(BUZZ_pin, 1800);
   delay(75);
+  noTone(BUZZ_pin);
+  delay(50);
   tone(BUZZ_pin, 2700);
   delay(75);
   noTone(BUZZ_pin);
+  delay(50);
+  noTone(BUZZ_pin);
   delay(150);
+  noTone(BUZZ_pin);
+  delay(75);
   tone(BUZZ_pin, 6400);
   delay(350);
   noTone(BUZZ_pin);
-  digitalWrite(LED_pin, HIGH);
+  digitalWrite(LED_pin, LOW);
+  analogWrite(recoveryLED_pin, 0);
 }
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
@@ -587,34 +614,40 @@ void loop() {
   // put your main code here, to run repeatedly:
   currentTime = millis();
 
-#ifdef SparkfunGPS
-  myGNSS.checkUblox(); // Check for the arrival of new data and process it.
-  myGNSS.checkCallbacks(); // Check if any callbacks are waiting to be processed.
-  delay(50);
-#endif
-
-  // Log IMU data
-  #ifdef PIMARONI
-    if ((currentTime - lastTime_IMU)>=IMU_UPDATE) {
-      gatherIMUdata(currentTime);
-      lastTime_IMU = currentTime;
-      // Serial.print("IN IMU UPDATE time: ");   Serial.println(currentTime);
+  #ifdef SparkfunGPS
+    if ((currentTime - lastTime_GPS)>=GPS_UPDATE) {
+      myGNSS.checkUblox(); // Check for the arrival of new data and process it.
+      myGNSS.checkCallbacks(); // Check if any callbacks are waiting to be processed.
+      lastTime_GPS = currentTime;
     }
   #endif
 
-  // Send an RFM message to Base
-  #ifdef SparkfunRFM
-  if((currentTime - lastTime_RFM)>=RFM_UPDATE){
-    if (USEACK){
-          //FLAG: configure 'sendbuffer' and 'sendlength'
-          if (radio.sendWithRetry(BASEID, sendbuffer, sendlength, 10))
-            if(debug){Serial.println("Success!  ACK received");}
-          else
-            if(debug){Serial.println("ERROR: [RFM] no ACK received");}
-        }
-      else{
-        radio.send(BASEID, sendbuffer, sendlength);
+    // Log IMU data
+    #ifdef PIMARONI
+      if ((currentTime - lastTime_IMU)>=IMU_UPDATE) {
+        gatherIMUdata(currentTime);
+        lastTime_IMU = currentTime;
+        // Serial.print("IN IMU UPDATE time: ");   Serial.println(currentTime);
       }
-}
-#endif
+    #endif
+
+    // Send an RFM message to Base
+  #ifdef SparkfunRFM
+    if((currentTime - lastTime_RFM)>=RFM_UPDATE){
+      //FLAG: configure 'sendbuffer' and 'sendlength'
+      sprintf(sendbuffer,"Drifter clock: %lu",currentTime);
+      if (USEACK){
+        if (radio.sendWithRetry(BASEID, sendbuffer, sizeof(sendbuffer), 10)){
+          if(debug){Serial.println("Success!  ACK received");}
+        }
+        else{
+          if(debug){Serial.println("ERROR: [RFM] no ACK received");}
+        }
+      }
+      else{
+        radio.send(BASEID, sendbuffer, sizeof(sendbuffer));
+      }
+      lastTime_RFM = currentTime;
+    }
+  #endif
 }
