@@ -16,7 +16,7 @@
 #include <Wire.h>
 
 bool debug = true; //DEBUG: TRUE enables Serial messages and extra data.
-bool silent_start = true; // Disable buzzer on startup
+bool silent_start = false; // Disable buzzer on startup
 #define PIMARONI // Define IMU
 #define SparkfunGPS // Define GPS
 //#define SparkfunRFM // Define RFM
@@ -227,6 +227,9 @@ void calibrateIMU(){
 /*this function retrieves data collected by the IMU every few 
   milliseconds and prints them to the SD card*/
 void gatherIMUdata(unsigned long currentTime){
+  int timer = millis(); //DEBUG
+  int timediff = 0; //DEBUG
+
   myfile=SD.open(IMUfilename,FILE_WRITE);
   myIMU.readSensor();
   xyzFloat gValue = myIMU.getAccRawValues();
@@ -244,6 +247,10 @@ void gatherIMUdata(unsigned long currentTime){
   //    myfile.flush();
   //    IMU_Write_Counter = 0;
   // }
+  timediff = millis() - timer;  //DEBUG
+  myfile.print("logtimer: "); //DEBUG
+  myfile.println(timediff); //DEBUG
+  myfile.flush();
   myfile.close();
 }
 #endif
@@ -335,19 +342,76 @@ void printRAWX(UBX_RXM_RAWX_data_t rawxData){
   }
 
   // Write data to SD card
-  #ifdef PoluluSD
-  myfile=SD.open(GPSfilename,FILE_WRITE);
-  memset(buf, '\0', sizeof(buf));; //clear the buffer
-  double rcvTowValue;
-  memcpy(&rcvTowValue, rawxData.header.rcvTow, sizeof(rcvTowValue));
-  memcpy(&rcvTowValue, rawxData.header.rcvTow, sizeof(rcvTowValue));
+  #ifdef PoluluSD 
+    int timer = millis();
+    int timediff = 0;
+    myfile = SD.open(GPSfilename, FILE_WRITE);  
+    // Convert rcvTow to double
+    double rcvTowValue;
+    memcpy(&rcvTowValue, rawxData.header.rcvTow, sizeof(rcvTowValue));
+    
+    // Write header information
+    myfile.print(rcvTowValue, 6);
+    myfile.print(',');
+    myfile.print(rawxData.header.week);
+    myfile.print(',');
+    myfile.print(rawxData.header.leapS);
+    myfile.print(',');
+    myfile.println(rawxData.header.numMeas);
 
-
-  sprintf(buf,"%u, %u,",rcvTowValue);
-  myfile.println(buf);
-  myfile.close();
-
-  #endif
+    // Write block information
+    for (int i = 0; i < rawxData.header.numMeas; i++) {
+      if(debug){ //DEBUG -play buzzer when collecting raw data
+        tone(BUZZ_pin, 800);
+        delay(10);
+        noTone(BUZZ_pin);
+      }
+      double prMesValue, cpMesValue, doMesValue;
+      memcpy(&prMesValue, rawxData.blocks[i].prMes, sizeof(prMesValue));
+      memcpy(&cpMesValue, rawxData.blocks[i].cpMes, sizeof(cpMesValue));
+      memcpy(&doMesValue, rawxData.blocks[i].doMes, sizeof(doMesValue));
+      
+      myfile.print(i);  // print datablock#
+      myfile.print(',');
+      myfile.print(prMesValue);
+      myfile.print(',');
+      myfile.print(cpMesValue);
+      myfile.print(',');
+      myfile.print(doMesValue);
+      myfile.print(',');
+      myfile.print(rawxData.blocks[i].gnssId);
+      myfile.print(',');
+      myfile.print(rawxData.blocks[i].svId);
+      myfile.print(',');
+      myfile.print(rawxData.blocks[i].sigId);
+      myfile.print(',');
+      myfile.print(rawxData.blocks[i].freqId);
+      myfile.print(',');
+      myfile.print(rawxData.blocks[i].lockTime);
+      myfile.print(',');
+      myfile.print(rawxData.blocks[i].cno);
+      myfile.print(',');
+      myfile.print(rawxData.blocks[i].prStdev);
+      myfile.print(',');
+      myfile.print(rawxData.blocks[i].cpStdev);
+      myfile.print(',');
+      myfile.print(rawxData.blocks[i].doStdev);
+      myfile.print(',');
+      myfile.print(rawxData.blocks[i].trkStat.bits.prValid);
+      myfile.print(',');
+      myfile.print(rawxData.blocks[i].trkStat.bits.cpValid);
+      myfile.print(',');
+      myfile.print(rawxData.blocks[i].trkStat.bits.halfCyc);
+      myfile.print(',');
+      myfile.println(rawxData.blocks[i].trkStat.bits.subHalfCyc);
+      //SPEED - use an snprintf block with pre-allocated buffer to make one SD write
+    }
+    timediff = millis() - timer;  //DEBUG
+    myfile.print("logtimer: "); //DEBUG
+    myfile.println(timediff); //DEBUG
+    myfile.flush();
+    myfile.close();
+    #endif
 }
 
 void printGNGGA(NMEA_GGA_data_t *nmeaData){
@@ -574,6 +638,7 @@ void initfiles(){
     sprintf(buf,"//Drifter number: %01d, Battery: %.2f", drifterNumber, VOLTAGE);
     myfile.println(buf);
     myfile.println("//$GPGGA,UTCtime,Latitude,N,Longitude,W,GPS_Quality,#SVs,HDOP,MSL_height,M(meters),Geoid-seperation,M(meters),Age_of_differentialGPS,Ref-StationID,*Checksum");  
+    myfile.println("rcvTow,week,leapS,numMeas,datablock#,prMes,cpMes,doMes,gnssId,svId,sigId,freqId,lockTime,cno,prStdev,cpStdev,doStdev,prValid,cpValid,halfCyc,subHalfCyc");
     //SPEED (do We really need to write this whole thing to the SD Card?  (header is fine but full GGA strings every 250ms + raw might be too much))
     // - using the INT pin for GPS could limit SD write until GPS data are available
     if(debug){Serial.println("- wrote GPS file header");}
@@ -595,10 +660,12 @@ void initfiles(){
  *                                            SETUP
  * ----------------- ------------------ ------------------ ------------------ ------------------*/
 void setup() {
-  Serial.begin(115200);
-  while(!Serial){
-    delay(20);
-  }  
+  if(false){ //DEBUG - change argument to debug for deployment release.  Otherwise loops waiting for serial
+    Serial.begin(115200);
+    while(!Serial){
+      delay(20);
+    }  
+  }
   #ifdef SparkfunGPS
     pinMode(18, INPUT_PULLUP);
     pinMode(19, INPUT_PULLUP);
