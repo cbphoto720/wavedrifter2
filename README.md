@@ -1,11 +1,14 @@
 # WIP
 - [x] solder recovery LED to test on breadboard
 - [x] more clearance for coin cell bat on sparkfun M8P board
-- [ ] FIGURE OUT GPS/ICM CONNECTION ISSUES
+- [x] FIGURE OUT GPS/ICM CONNECTION ISSUES
+- [ ] Come up with solution for QWIIC connector issues
+- [ ] write RAWX data to SD card (whole thing??? can the M8P make some UBX files?)
+	- [ ] [write data to SD card efficiently](http://elm-chan.org/docs/mmc/mmc_e.html) and [also this one](https://stackoverflow.com/questions/25837386/read-write-binary-data-on-sd-using-arduino)
 - [ ] BE CAREFUL USING RECOVERY LED AS SIGNAL LED (could draw too much current if PWM doesn't work)
 - [ ] voltage divider to measure battery life
 - [ ] 3DP new internalmounts 5.2
-- [ ] Manufacture drifter2.1
+- [x] Manufacture drifter2.1
 - [ ] post photos and write assembly guide
 
 # Tests

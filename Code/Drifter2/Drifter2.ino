@@ -16,10 +16,11 @@
 #include <Wire.h>
 
 bool debug = true; //DEBUG: TRUE enables Serial messages and extra data.
-// #define PIMARONI // Define IMU
+bool silent_start = true; // Disable buzzer on startup
+#define PIMARONI // Define IMU
 #define SparkfunGPS // Define GPS
 //#define SparkfunRFM // Define RFM
-// #define PoluluSD // Define MicroSD
+#define PoluluSD // Define MicroSD
 
 /* drifter identification number */
 const int drifterNumber = 1; // My node ID (1 to 254) (0 reserved for BASE STATION) (255 reserved for broadcast RFM)
@@ -118,24 +119,35 @@ const int BUZZ_pin = 1; //Drifter V2 = 15
  /*IMU initializtion functions*/
 //this function checks that the IMU is working
 void initIMU(){
+  Wire.beginTransmission(ICM20948_ADDR);
+  int error = Wire.endTransmission();
+  if(error == 0){
+    Serial.println("ICM detected on bus");
+  }
+  
   int linecount=0;
   Serial.println("waiting for ICM");
   while(!myIMU.init()){
     Serial.print(".");
-    delay(250);
+    delay(50);
     linecount++;
-    if(linecount==50){
+    if(linecount==250){
       Serial.println("waiting for ICM");
       linecount=0;
+      Wire.beginTransmission(ICM20948_ADDR);
+      int error = Wire.endTransmission();
+      if(error == 0){
+        Serial.println("ICM detected on bus");
+      }
     }
   }
-  if(!myIMU.init()){
-    Serial.println("ERROR: ICM failed");
-    while(1);
-  }
-  else{
-    Serial.println("ICM initialized");
-  }
+  // if(!myIMU.init()){
+  //   Serial.println("ERROR: ICM failed");
+  //   while(1);
+  // }
+  // else{
+  //   Serial.println("ICM initialized");
+  // }
   //test Magnometer exists and works
   if(!myIMU.initMagnetometer()){
     Serial.println("ERROR: Magnetometer failed");
@@ -224,7 +236,9 @@ void gatherIMUdata(unsigned long currentTime){
   float magY = yMagGain*(magValue.y-yMagOffset);
   float magZ = zMagGain*(magValue.z-zMagOffset);
   //display current time and IMU results on the IMU file
-  myfile.println(sprintf(buf,"%lu, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f,",currentTime,gValue.x,gValue.y,gValue.z,gyr.x,gyr.y,gyr.z,magX,magY,magZ));
+  memset(buf, '\0', sizeof(buf));; //clear the buffer
+  sprintf(buf,"%lu, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f,",currentTime,gValue.x,gValue.y,gValue.z,gyr.x,gyr.y,gyr.z,magX,magY,magZ);
+  myfile.println(buf);
   // IMU_Write_Counter++;
   // if (IMU_Write_Counter > 200) {
   //    myfile.flush();
@@ -254,6 +268,26 @@ void initGPS(){
   }
 
   // Turn the GPS on
+  // Serial.println("Ready to test");
+  // if (myGNSS.isConnected()) {
+  //     Serial.println("GNSS module is recognized");
+  //     // Now proceed to initialize
+  // }
+  // else{
+  //   Serial.println("GNSS module is not recognized");
+  // }
+
+  for (int address = 1; address < 127; address++) {
+    Wire.beginTransmission(address);
+    int error = Wire.endTransmission();
+    if (error == 0) {
+      Serial.println(F("Device found"));
+    }
+    else{
+
+    }
+  }
+
   int linecount=0;
   Serial.println("waiting for GPS");
   while(!myGNSS.begin()){
@@ -268,7 +302,8 @@ void initGPS(){
   if(!myGNSS.begin()){
     Serial.println("ERROR: GPS failed");
     while(1);
-  } else{
+  } 
+  else{
     Serial.println("GPS initialized");
   }
 
@@ -298,6 +333,21 @@ void printRAWX(UBX_RXM_RAWX_data_t rawxData){
     Serial.print(F("\r\nBlock 0 prMes: "));
     Serial.println(prMesValue, 6); // Print with 6 decimal places
   }
+
+  // Write data to SD card
+  #ifdef PoluluSD
+  myfile=SD.open(GPSfilename,FILE_WRITE);
+  memset(buf, '\0', sizeof(buf));; //clear the buffer
+  double rcvTowValue;
+  memcpy(&rcvTowValue, rawxData.header.rcvTow, sizeof(rcvTowValue));
+  memcpy(&rcvTowValue, rawxData.header.rcvTow, sizeof(rcvTowValue));
+
+
+  sprintf(buf,"%u, %u,",rcvTowValue);
+  myfile.println(buf);
+  myfile.close();
+
+  #endif
 }
 
 void printGNGGA(NMEA_GGA_data_t *nmeaData){
@@ -492,11 +542,11 @@ void initfiles(){
   myfile.close();
   
   // Write header to IMUfile
-  #ifdef Pimoroni
+  #ifdef PIMARONI
   myfile = SD.open(IMUfilename, FILE_WRITE);
   if(myfile){
     // IMU header
-    myfile.println("//////////// NEW START ////////////");
+    myfile.println("//--------- NEW START ---------//");
     sprintf(buf,"// Drifter number: %01d, Battery: %.2f", drifterNumber, VOLTAGE);
     myfile.println(buf);
     sprintf(buf,"// IMU_update: %d ms, GPS_update: %d ms, Transciever_update: %d ms",IMU_UPDATE,GPS_UPDATE,RFM_UPDATE);
@@ -504,6 +554,7 @@ void initfiles(){
     sprintf(buf,"// Accel_range: %s, Gyro_range: %s", accelRange, gyroRange);
     myfile.println(buf);
     myfile.println("IMUtime, Ax, Ay, Az, Gx, Gy, Gz, Mx, My, Mz, P, T");
+    if(debug){Serial.println("- wrote IMU file header");}
   }
   else{
     Serial.print("ERROR: unable to open file: ");
@@ -519,12 +570,13 @@ void initfiles(){
   if (myfile)
   {
     // GPS header
-    myfile.println("//////////// NEW START ////////////");
+    myfile.println("//--------- NEW START ---------//");
     sprintf(buf,"//Drifter number: %01d, Battery: %.2f", drifterNumber, VOLTAGE);
     myfile.println(buf);
     myfile.println("//$GPGGA,UTCtime,Latitude,N,Longitude,W,GPS_Quality,#SVs,HDOP,MSL_height,M(meters),Geoid-seperation,M(meters),Age_of_differentialGPS,Ref-StationID,*Checksum");  
     //SPEED (do We really need to write this whole thing to the SD Card?  (header is fine but full GGA strings every 250ms + raw might be too much))
     // - using the INT pin for GPS could limit SD write until GPS data are available
+    if(debug){Serial.println("- wrote GPS file header");}
   }
   else{
     Serial.print("ERROR: unable to open file: ");
@@ -548,7 +600,10 @@ void setup() {
     delay(20);
   }  
   #ifdef SparkfunGPS
-    Wire.begin(UbloxM8P_ADDR); //FLAG [GPS] testing
+    pinMode(18, INPUT_PULLUP);
+    pinMode(19, INPUT_PULLUP);
+    Wire.setClock(100000);
+    Wire.begin();
   #endif
 
   Serial.println(" ");
@@ -562,6 +617,9 @@ void setup() {
   pinMode(BUZZ_pin, OUTPUT);
   pinMode(LED_pin, OUTPUT);
   pinMode(recoveryLED_pin, OUTPUT);
+  noTone(BUZZ_pin);
+  digitalWrite(LED_pin, LOW);
+  analogWrite(recoveryLED_pin, 0);
   #ifdef PIMARONI 
     initIMU();
     calibrateIMU();
@@ -580,31 +638,33 @@ void setup() {
   // Startup sound (data is now logging)
   digitalWrite(LED_pin, HIGH);
   analogWrite(recoveryLED_pin, 10);
-  tone(BUZZ_pin, 800);
-  delay(75);
-  noTone(BUZZ_pin);
-  delay(50);
-  tone(BUZZ_pin, 1200);
-  delay(75);
-  noTone(BUZZ_pin);
-  delay(50);
-  tone(BUZZ_pin, 1800);
-  delay(75);
-  noTone(BUZZ_pin);
-  delay(50);
-  tone(BUZZ_pin, 2700);
-  delay(75);
-  noTone(BUZZ_pin);
-  delay(50);
-  noTone(BUZZ_pin);
-  delay(150);
-  noTone(BUZZ_pin);
-  delay(75);
-  tone(BUZZ_pin, 6400);
-  delay(350);
-  noTone(BUZZ_pin);
+  if(!silent_start){
+    tone(BUZZ_pin, 800);
+    delay(75);
+    noTone(BUZZ_pin);
+    delay(25);
+    tone(BUZZ_pin, 1200);
+    delay(75);
+    noTone(BUZZ_pin);
+    delay(25);
+    tone(BUZZ_pin, 1800);
+    delay(75);
+    noTone(BUZZ_pin);
+    delay(25);
+    tone(BUZZ_pin, 2700);
+    delay(75);
+    noTone(BUZZ_pin);
+    delay(250);
+    noTone(BUZZ_pin);
+    delay(75);
+    tone(BUZZ_pin, 6400);
+    delay(350);
+    noTone(BUZZ_pin);
+  }
   digitalWrite(LED_pin, LOW);
   analogWrite(recoveryLED_pin, 0);
+
+  if(debug){delay(5000);}
 }
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
