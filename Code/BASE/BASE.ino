@@ -1,28 +1,26 @@
-// RFM69HCW Example Sketch
-// Send serial input characters from one RFM69 node to another
-// Based on RFM69 library sample code by Felix Rusu
-// http://LowPowerLab.com/contact
-// Modified for RFM69HCW by Mike Grusin, 4/16
+/*
+  Drifter 2: A water-following, Inertial-Measuring, Sattelite-tracking, Position-Transceiving, wave drifter
+  By: Carson Black
+  Scripps Institute of Oceanography
+  Date: April 19, 2024
 
-// This sketch will show you the basics of using an
-// RFM69HCW radio module. SparkFun's part numbers are:
-// 915MHz: https://www.sparkfun.com/products/12775
-// 434MHz: https://www.sparkfun.com/products/12823
+  This Code is for the BASE station.  Each Drifter is configured to broadcast coordinates to node 0 on the network, the base node!
+  This base station reads in telemetry from the broadcasting drifters and displays it on a field laptop.
 
-// See the hook-up guide for wiring instructions:
-// https://learn.sparkfun.com/tutorials/rfm69hcw-hookup-guide
+  To-Do:
+  - [x] read in broadcast strings from a drifter
+  - [ ] handle broadcasts from multiple drifers (broadcast a timing command that sets each clock for broadcasting)
+    - give a "token" to each drifter that gives it permission to broadcast
+  - [ ] relay broadcasts into external software for GPS mapping
 
-// Uses the RFM69 library by Felix Rusu, LowPowerLab.com
-// Original library: https://www.github.com/lowpowerlab/rfm69
-// SparkFun repository: https://github.com/sparkfun/RFM69HCW_Breakout
-
-// Include the RFM69 and SPI libraries:
+  Hardware Connections:
+  - Sparkfun GPS board Ublox NEO-M8P-2 [TAOGLAS AGGP.25F.07.0060A antenna] (I2C) (Optional)
+  - Sparkfun RFM69HCW Wireless Transceiver - 915MHz (SPI)
+*/
 
 #include <RFM69.h>
 #include <RFM69_ATC.h>
 #include <SPI.h>
-
-// Addresses for this node. CHANGE THESE FOR EACH NODE!
 
 #define NETWORKID     10   // Must be the same for all nodes (0 to 255)
 #define MYNODEID      0   // My node ID (0 to 255)

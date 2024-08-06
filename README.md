@@ -7,8 +7,12 @@
 	- [ ] [write data to SD card efficiently](http://elm-chan.org/docs/mmc/mmc_e.html) and [also this one](https://stackoverflow.com/questions/25837386/read-write-binary-data-on-sd-using-arduino)
 - [ ] BE CAREFUL USING RECOVERY LED AS SIGNAL LED (could draw too much current if PWM doesn't work)
 - [ ] voltage divider to measure battery life
+	- modify power battery connection to have a splitter for resistors and for the power board
+	- design a power delivery pcb that has voltage monitoring, Hal effect sensor ON/OFF, and RFM filtering built in!
 - [ ] 3DP new internalmounts 5.2
 - [x] Manufacture drifter2.1
+- [ ] Base station code to run into mission planner
+- view GPS updates
 - [ ] post photos and write assembly guide
 
 # Tests
