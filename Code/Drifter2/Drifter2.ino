@@ -638,7 +638,7 @@ void initfiles(){
     sprintf(buf,"//Drifter number: %01d, Battery: %.2f", drifterNumber, VOLTAGE);
     myfile.println(buf);
     myfile.println("//$GPGGA,UTCtime,Latitude,N,Longitude,W,GPS_Quality,#SVs,HDOP,MSL_height,M(meters),Geoid-seperation,M(meters),Age_of_differentialGPS,Ref-StationID,*Checksum");  
-    myfile.println("rcvTow,week,leapS,numMeas,datablock#,prMes,cpMes,doMes,gnssId,svId,sigId,freqId,lockTime,cno,prStdev,cpStdev,doStdev,prValid,cpValid,halfCyc,subHalfCyc");
+    myfile.println("//rcvTow,week,leapS,numMeas,datablock#,prMes,cpMes,doMes,gnssId,svId,sigId,freqId,lockTime,cno,prStdev,cpStdev,doStdev,prValid,cpValid,halfCyc,subHalfCyc");
     //SPEED (do We really need to write this whole thing to the SD Card?  (header is fine but full GGA strings every 250ms + raw might be too much))
     // - using the INT pin for GPS could limit SD write until GPS data are available
     if(debug){Serial.println("- wrote GPS file header");}
