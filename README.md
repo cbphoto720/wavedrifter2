@@ -2,12 +2,17 @@
 - [x] solder recovery LED to test on breadboard
 - [x] more clearance for coin cell bat on sparkfun M8P board
 - [x] FIGURE OUT GPS/ICM CONNECTION ISSUES
+- [ ] write a new file if GPS / IMU log get too big?
+
+
 - [ ] Come up with solution for QWIIC connector issues
 - [ ] write RAWX data to SD card (whole thing??? can the M8P make some UBX files?)
 	- [ ] [write data to SD card efficiently](http://elm-chan.org/docs/mmc/mmc_e.html) and [also this one](https://stackoverflow.com/questions/25837386/read-write-binary-data-on-sd-using-arduino)
 - [ ] BE CAREFUL USING RECOVERY LED AS SIGNAL LED (could draw too much current if PWM doesn't work)
 - [ ] voltage divider to measure battery life
 	- modify power battery connection to have a splitter for resistors and for the power board
+	- **Low Voltage -> activate recovery mode**
+	- **Extreme Voltage - > Shut down rover** (may only be able to do sleep mode)
 	- design a power delivery pcb that has voltage monitoring, Hal effect sensor ON/OFF, and RFM filtering built in!
 - [ ] 3DP new internalmounts 5.2
 - [x] Manufacture drifter2.1
@@ -267,3 +272,6 @@ TRANSMIT MESSAGE:
 - Hemisphere half #2 could have an internal lip to improve mating strength
 - 50A durometer O-ring and 1/8" cross section would give us the best change with our space.  Could drop to a 3/32 o-ring if space is required.  (Drifter #1 was 70A durometer, 1/16 ring with an improper groove design) 
 - 1mm clearance on o-ring groove (need to make battery decision to reduce O-ring size
+
+# References
+- **[minimal-arduino-mavlink-example](https://github.com/patrickelectric/minimal-arduino-mavlink-example)** Code to connect teensy to MissionPlanner
