@@ -660,8 +660,9 @@ void initfiles(){
  *                                      General Functions
  * ----------------- ------------------ ------------------ ------------------ ------------------*/
 float readBatteryVoltage(int numReadings) {
+  int analogValue=0;
   if(numReadings==1){ // For speed
-    analogValue=analogRead(VOLTpin);// Read the analog value (0 to 1023)
+    analogValue=analogRead(VOLTpin); // Read the analog value (0 to 1023)
   }
   else{ // For accuracy
     long total = 0;
@@ -669,10 +670,10 @@ float readBatteryVoltage(int numReadings) {
       total += analogRead(VOLTpin);
       delay(5); // Small delay between readings to reduce correlation
     }
-    int analogValue = total/numReadings;  // avg the analog values
+    analogValue = total/numReadings;  // avg the analog values
   }
   float voltageOut = (analogValue / 1023.0) * 3.3;   // Convert analog to voltage (assuming a 3.3V reference)
-  float batteryVoltage = voltageOut * scalingFactor;  // Scale up to the original voltage using the scaling factor
+  float batteryVoltage = voltageOut * 1.303;  // Scale up to the original voltage using the scaling factor
   return batteryVoltage;
 }
 
@@ -687,11 +688,11 @@ void setup() {
       delay(20);
     }  
   }
-  #ifdef SparkfunGPS
+  #if defined(SparkfunGPS) || defined(PIMARONI)
     pinMode(18, INPUT_PULLUP);
     pinMode(19, INPUT_PULLUP);
     Wire.begin();
-    Wire.setClock(400000);  //FLAG: I2C fast mode
+    Wire.setClock(400000);  //FLAG: I2C fast mode 400000 or normal 100000
   #endif
 
   Serial.println(" ");
@@ -709,7 +710,7 @@ void setup() {
   noTone(BUZZ_pin);
   digitalWrite(LED_pin, LOW);
   analogWrite(recoveryLED_pin, 0);
-  Voltage= readBatteryVoltage(5);
+  VOLTAGE= readBatteryVoltage(5);
   #ifdef PIMARONI 
     initIMU();
     calibrateIMU();
@@ -764,7 +765,12 @@ void loop() {
   // put your main code here, to run repeatedly:
   currentTime = millis();
   if((currentTime - lastTime_System)>=SYSTEM_UPDATE){
-    Voltage= readBatteryVoltage(1);
+    VOLTAGE= readBatteryVoltage(1);
+    if(debug){
+      Serial.print("Voltage: ");
+      Serial.println(VOLTAGE);
+    }
+    lastTime_System=currentTime;
   }
 
   #ifdef SparkfunGPS
