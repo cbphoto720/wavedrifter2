@@ -37,6 +37,14 @@ const unsigned int GPS_UPDATE = 250; //ms
 unsigned long lastTime_GPS = 0;
 const unsigned int RFM_UPDATE= 8000; //ms
 unsigned long lastTime_RFM = 0;
+const unsigned int SYSTEM_UPDATE = 1000; //ms
+unsigned long lastTime_System = 0;
+
+const int VOLTpin = 16; // Voltage
+const int LED_pin = 22;  // Indicator LED
+const int recoveryLED_pin = 6;  // Recovery LED
+const int BUZZ_pin = 1; // Buzzer
+// FLAG [Drifter V2: const int BUZZ_pin = 15;]
 
 
 // SD variables
@@ -103,14 +111,6 @@ char buf[100] = {'\0'}; //DEBUG - sprinf needs a buffer char to store data!  fig
   RFM69 radio(MY_RF69_SPI_CS,MY_RF69_IRQ_PIN);
   #endif
 #endif
-
-/* Led setup */
-const int LED_pin = 22;
-// bool switchState = true;
-const int recoveryLED_pin = 6;
-
-/* Buzz setup */
-const int BUZZ_pin = 1; //Drifter V2 = 15
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
  *                                IMU CODE Pimoroni
@@ -657,6 +657,27 @@ void initfiles(){
 #endif
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
+ *                                      General Functions
+ * ----------------- ------------------ ------------------ ------------------ ------------------*/
+float readBatteryVoltage(int numReadings) {
+  if(numReadings==1){ // For speed
+    analogValue=analogRead(VOLTpin);// Read the analog value (0 to 1023)
+  }
+  else{ // For accuracy
+    long total = 0;
+    for (int i = 0; i < numReadings; i++) {
+      total += analogRead(VOLTpin);
+      delay(5); // Small delay between readings to reduce correlation
+    }
+    int analogValue = total/numReadings;  // avg the analog values
+  }
+  float voltageOut = (analogValue / 1023.0) * 3.3;   // Convert analog to voltage (assuming a 3.3V reference)
+  float batteryVoltage = voltageOut * scalingFactor;  // Scale up to the original voltage using the scaling factor
+  return batteryVoltage;
+}
+
+
+/*------------------ ------------------ ------------------ ------------------ ------------------
  *                                            SETUP
  * ----------------- ------------------ ------------------ ------------------ ------------------*/
 void setup() {
@@ -669,8 +690,8 @@ void setup() {
   #ifdef SparkfunGPS
     pinMode(18, INPUT_PULLUP);
     pinMode(19, INPUT_PULLUP);
-    Wire.setClock(100000);
     Wire.begin();
+    Wire.setClock(400000);  //FLAG: I2C fast mode
   #endif
 
   Serial.println(" ");
@@ -684,9 +705,11 @@ void setup() {
   pinMode(BUZZ_pin, OUTPUT);
   pinMode(LED_pin, OUTPUT);
   pinMode(recoveryLED_pin, OUTPUT);
+  pinMode(VOLTpin, INPUT);
   noTone(BUZZ_pin);
   digitalWrite(LED_pin, LOW);
   analogWrite(recoveryLED_pin, 0);
+  Voltage= readBatteryVoltage(5);
   #ifdef PIMARONI 
     initIMU();
     calibrateIMU();
@@ -740,6 +763,9 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
   currentTime = millis();
+  if((currentTime - lastTime_System)>=SYSTEM_UPDATE){
+    Voltage= readBatteryVoltage(1);
+  }
 
   #ifdef SparkfunGPS
     if ((currentTime - lastTime_GPS)>=GPS_UPDATE) {
