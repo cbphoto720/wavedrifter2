@@ -3,6 +3,7 @@
 - [x] more clearance for coin cell bat on sparkfun M8P board
 - [x] FIGURE OUT GPS/ICM CONNECTION ISSUES
 - [ ] write a new file if GPS / IMU log get too big?
+- [ ] Test the drifter2 Voltage sketch to see if it correctly reads the input voltage
 
 
 - [ ] Come up with solution for QWIIC connector issues
