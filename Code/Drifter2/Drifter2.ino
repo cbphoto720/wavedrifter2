@@ -51,6 +51,11 @@ const int BUZZ_pin = 1; // Buzzer
 File myfile;
 const int SDpinCS = 5; // Pin 10 default on Teensy
 char buf[100] = {'\0'}; //DEBUG - sprinf needs a buffer char to store data!  figure out how big you want this to be
+// IMU buffer
+const int bufferSize = 25; // Adjust based on how many readings you want to buffer
+char imuBuffer[bufferSize][93]; // Assuming 100 chars per line
+int bufferIndex = 0;
+
 
 /* IMU Variables */
 #ifdef PIMARONI
@@ -253,6 +258,53 @@ void gatherIMUdata(unsigned long currentTime){
   myfile.flush();
   myfile.close();
 }
+
+void bufferIMUData() {
+    myIMU.readSensor();
+    xyzFloat gValue = myIMU.getAccRawValues();
+    xyzFloat gyr = myIMU.getGyrValues();
+    xyzFloat magValue = myIMU.getMagValues();
+    float magX = xMagGain * (magValue.x - xMagOffset);
+    float magY = yMagGain * (magValue.y - yMagOffset);
+    float magZ = zMagGain * (magValue.z - zMagOffset);
+
+    // Store in buffer
+    sprintf(imuBuffer[bufferIndex], "%lu, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f",
+            currentTime, gValue.x, gValue.y, gValue.z, gyr.x, gyr.y, gyr.z, magX, magY, magZ);
+    bufferIndex++;
+    // bytes: (10 + )
+
+    // Check if buffer is full
+    if (bufferIndex >= bufferSize) {
+        writeIMUDataToSD();
+        bufferIndex = 0;
+    }
+}
+
+void writeIMUDataToSD() {
+    myfile = SD.open(IMUfilename, FILE_WRITE);
+    for (int i = 0; i < bufferIndex; i++) {
+        myfile.println(imuBuffer[i]);
+    }
+    myfile.flush();
+    myfile.close();
+
+    // if(debug){
+    //   Serial.print(sizeof("gValue of x: "));
+    //   Serial.println(sizeof(gValue.x));
+    //   Serial.print(sizeof("gValue of y: "));
+    //   Serial.println(sizeof(gValue.y));
+    //   Serial.print(sizeof("gValue of z: "));
+    //   Serial.println(sizeof(gValue.z));
+    // }
+}
+
+void flushRemainingData() { //FLAG 
+    if (bufferIndex > 0) {
+        writeIMUDataToSD();
+    }
+}
+
 #endif
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
