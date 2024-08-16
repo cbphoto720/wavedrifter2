@@ -1,0 +1,102 @@
+//--------- NEW START ---------//
+//Drifter number: 1, Battery: 3.61
+//$GPGGA,UTCtime,Latitude,N,Longitude,W,GPS_Quality,#SVs,HDOP,MSL_height,M(meters),Geoid-seperation,M(meters),Age_of_differentialGPS,Ref-StationID,*Checksum
+//rcvTow,week,leapS,numMeas,datablock#,prMes,cpMes,doMes,gnssId,svId,sigId,freqId,lockTime,cno,prStdev,cpStdev,doStdev,prValid,cpValid,halfCyc,subHalfCyc
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+6.750000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+7.000000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+7.250000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+7.500000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+7.750000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+8.000000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+8.250000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+8.500000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+9.000000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+9.250000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+9.500000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+9.750000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+10.000000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+10.250000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+10.500000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+10.750000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+11.000000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+11.250000,0,18,0
+logtimer: 10
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+11.500000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+11.750000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+12.250000,0,18,0
+logtimer: 35
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+12.500000,0,18,0
+logtimer: 34
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+12.750000,0,18,0
+logtimer: 9
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+13.000000,0,18,0
+logtimer: 35
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+

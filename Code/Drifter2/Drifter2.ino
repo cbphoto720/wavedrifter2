@@ -16,7 +16,7 @@
 #include <Wire.h>
 
 bool debug = true; //DEBUG: TRUE enables Serial messages and extra data.
-bool silent_start = false; // Disable buzzer on startup
+bool silent_start = true; // Disable buzzer on startup
 #define PIMARONI // Define IMU
 #define SparkfunGPS // Define GPS
 //#define SparkfunRFM // Define RFM
@@ -246,7 +246,7 @@ void gatherIMUdata(unsigned long currentTime){
   float magZ = zMagGain*(magValue.z-zMagOffset);
   //display current time and IMU results on the IMU file
   memset(buf, '\0', sizeof(buf));; //clear the buffer
-  sprintf(buf,"%lu, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f,",currentTime,gValue.x,gValue.y,gValue.z,gyr.x,gyr.y,gyr.z,magX,magY,magZ);
+  sprintf(buf,"%lu, %.1f, %.1f, %.1f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f,",currentTime,gValue.x,gValue.y,gValue.z,gyr.x,gyr.y,gyr.z,magX,magY,magZ);
   myfile.println(buf);
   // IMU_Write_Counter++;
   // if (IMU_Write_Counter > 200) {
@@ -271,7 +271,7 @@ void bufferIMUData(unsigned long currentTime) {
   float magZ = zMagGain * (magValue.z - zMagOffset);
 
   // Store in buffer
-  sprintf(imuBuffer[bufferIndex], "%lu, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f",
+  sprintf(imuBuffer[bufferIndex], "%lu, %.1f, %.1f, %.1f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f",
           currentTime, gValue.x, gValue.y, gValue.z, gyr.x, gyr.y, gyr.z, magX, magY, magZ);
   bufferIndex++;
 
@@ -303,7 +303,7 @@ void writeIMUDataToSD() {
   
     for (int i = 0; i < bufferIndex; i++) {
         myfile.println(imuBuffer[i]);
-        myfile.print("\n");
+        // myfile.print("\n");
     }
     myfile.flush();
     myfile.close();
@@ -564,8 +564,8 @@ void GPSbinaryWrite(uint8_t* datatosend, size_t datalen){
   }
   byte error = Wire.endTransmission(); // End transmission
 
-  if(debug){Serial.print("[GPS] size of UBX packet: ");}
-  if(debug){Serial.println(datalen);}
+  // if(debug){Serial.print("[GPS] size of UBX packet: ");} //DEBUG
+  // if(debug){Serial.println(datalen);} //DEBUG
 
   if (error == 0) {
     Serial.println("GPS config packet sent successfully");
