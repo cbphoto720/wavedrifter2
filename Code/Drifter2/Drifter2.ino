@@ -47,16 +47,6 @@ const int BUZZ_pin = 1; // Buzzer
 // FLAG [Drifter V2: const int BUZZ_pin = 15;]
 
 
-// SD variables
-File myfile;
-const int SDpinCS = 5; // Pin 10 default on Teensy
-char buf[100] = {'\0'}; //DEBUG - sprinf needs a buffer char to store data!  figure out how big you want this to be
-// IMU buffer
-const int bufferSize = 25; // Adjust based on how many readings you want to buffer
-char imuBuffer[bufferSize][93]; // Assuming 100 chars per line
-int bufferIndex = 0;
-
-
 /* IMU Variables */
 #ifdef PIMARONI
   #include <ICM20948_WE.h>
@@ -116,6 +106,17 @@ int bufferIndex = 0;
   RFM69 radio(MY_RF69_SPI_CS,MY_RF69_IRQ_PIN);
   #endif
 #endif
+
+/* SD variables */
+File myfile;
+const int SDpinCS = 5; // Pin 10 default on Teensy
+char buf[100] = {'\0'}; //DEBUG - sprinf needs a buffer char to store data!  figure out how big you want this to be
+// IMU buffer
+const int IMUbufferSize = 25; // Adjust based on how many readings you want to buffer
+// float IMUbuffer[IMUbufferSize][9]; // 9 float values per entry
+// unsigned long IMUtimebuffer[IMUbufferSize];  // buffer for timestamps
+char imuBuffer[IMUbufferSize][100]; // Assuming 92 chars per line
+int bufferIndex = 0;
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
  *                                IMU CODE Pimoroni
@@ -259,44 +260,53 @@ void gatherIMUdata(unsigned long currentTime){
   myfile.close();
 }
 
-void bufferIMUData() {
-    myIMU.readSensor();
-    xyzFloat gValue = myIMU.getAccRawValues();
-    xyzFloat gyr = myIMU.getGyrValues();
-    xyzFloat magValue = myIMU.getMagValues();
-    float magX = xMagGain * (magValue.x - xMagOffset);
-    float magY = yMagGain * (magValue.y - yMagOffset);
-    float magZ = zMagGain * (magValue.z - zMagOffset);
+void bufferIMUData(unsigned long currentTime) {
+  memset(imuBuffer[bufferIndex], 0, sizeof(imuBuffer[bufferIndex]));
+  myIMU.readSensor();
+  xyzFloat gValue = myIMU.getAccRawValues();
+  xyzFloat gyr = myIMU.getGyrValues();
+  xyzFloat magValue = myIMU.getMagValues();
+  float magX = xMagGain * (magValue.x - xMagOffset);
+  float magY = yMagGain * (magValue.y - yMagOffset);
+  float magZ = zMagGain * (magValue.z - zMagOffset);
 
-    // Store in buffer
-    sprintf(imuBuffer[bufferIndex], "%lu, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f",
-            currentTime, gValue.x, gValue.y, gValue.z, gyr.x, gyr.y, gyr.z, magX, magY, magZ);
-    bufferIndex++;
-    // bytes: (10 + )
+  // Store in buffer
+  sprintf(imuBuffer[bufferIndex], "%lu, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f",
+          currentTime, gValue.x, gValue.y, gValue.z, gyr.x, gyr.y, gyr.z, magX, magY, magZ);
+  bufferIndex++;
 
-    // Check if buffer is full
-    if (bufferIndex >= bufferSize) {
-        writeIMUDataToSD();
-        bufferIndex = 0;
-    }
+  // IMUtimebuffer[bufferIndex] = currentTime; // Store timestamp
+  // IMUbuffer[bufferIndex][0] = gValue.x;
+  // IMUbuffer[bufferIndex][1] = gValue.y;
+  // IMUbuffer[bufferIndex][2] = gValue.z;
+  // IMUbuffer[bufferIndex][3] = gyr.x;
+  // IMUbuffer[bufferIndex][4] = gyr.y;
+  // IMUbuffer[bufferIndex][5] = gyr.z;
+  // IMUbuffer[bufferIndex][6] = magX;
+  // IMUbuffer[bufferIndex][7] = magY;
+  // IMUbuffer[bufferIndex][8] = magZ;
+  // bufferIndex++;
+
+  // Check if buffer is full
+  if (bufferIndex >= IMUbufferSize) {
+      writeIMUDataToSD();
+      bufferIndex = 0;
+  }
 }
 
 void writeIMUDataToSD() {
     myfile = SD.open(IMUfilename, FILE_WRITE);
+    // // Write timestamps
+    // myfile.write((uint8_t*)IMUtimebuffer, bufferIndex * sizeof(unsigned long));
+    // // Write IMU data
+    // myfile.write((uint8_t*)IMUbuffer, bufferIndex * sizeof(IMUbuffer[0]));
+  
     for (int i = 0; i < bufferIndex; i++) {
         myfile.println(imuBuffer[i]);
+        myfile.print("\n");
     }
     myfile.flush();
     myfile.close();
-
-    // if(debug){
-    //   Serial.print(sizeof("gValue of x: "));
-    //   Serial.println(sizeof(gValue.x));
-    //   Serial.print(sizeof("gValue of y: "));
-    //   Serial.println(sizeof(gValue.y));
-    //   Serial.print(sizeof("gValue of z: "));
-    //   Serial.println(sizeof(gValue.z));
-    // }
 }
 
 void flushRemainingData() { //FLAG 
@@ -836,7 +846,8 @@ void loop() {
     // Log IMU data
     #ifdef PIMARONI
       if ((currentTime - lastTime_IMU)>=IMU_UPDATE) {
-        gatherIMUdata(currentTime);
+        // gatherIMUdata(currentTime);
+        bufferIMUData(currentTime);
         lastTime_IMU = currentTime;
         // Serial.print("IN IMU UPDATE time: ");   Serial.println(currentTime);
       }

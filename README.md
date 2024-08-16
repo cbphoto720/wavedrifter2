@@ -6,7 +6,9 @@
 - [ ] Test the drifter2 Voltage sketch to see if it correctly reads the input voltage
 
 
-- [ ] Come up with solution for QWIIC connector issues
+- [x] Come up with solution for QWIIC connector issues
+	- plug it in harder :)
+- [ ] Come up with timing scheme for not overlapping GPS, IMU, and SD writes.  RFM broadcast needs to be its own thing.
 - [ ] write RAWX data to SD card (whole thing??? can the M8P make some UBX files?)
 	- [ ] [write data to SD card efficiently](http://elm-chan.org/docs/mmc/mmc_e.html) and [also this one](https://stackoverflow.com/questions/25837386/read-write-binary-data-on-sd-using-arduino)
 - [ ] BE CAREFUL USING RECOVERY LED AS SIGNAL LED (could draw too much current if PWM doesn't work)
