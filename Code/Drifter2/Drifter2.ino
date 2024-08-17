@@ -16,9 +16,9 @@
 #include <Wire.h>
 
 bool debug = true; //DEBUG: TRUE enables Serial messages and extra data.
-bool silent_start = true; // Disable buzzer on startup
+bool silent_start = false; // Disable buzzer on startup
 #define PIMARONI // Define IMU
-#define SparkfunGPS // Define GPS
+// #define SparkfunGPS // Define GPS
 //#define SparkfunRFM // Define RFM
 #define PoluluSD // Define MicroSD
 
@@ -33,6 +33,7 @@ float VOLTAGE = 0; // Battery voltage (V)
 unsigned long currentTime = 0;
 const unsigned int IMU_UPDATE = 40; //ms
 unsigned long lastTime_IMU = 0;
+elapsedMillis sinceIMU;
 const unsigned int GPS_UPDATE = 250; //ms
 unsigned long lastTime_GPS = 0;
 const unsigned int RFM_UPDATE= 8000; //ms
@@ -49,6 +50,7 @@ const int BUZZ_pin = 1; // Buzzer
 
 /* IMU Variables */
 #ifdef PIMARONI
+  IntervalTimer IMUtimer;
   #include <ICM20948_WE.h>
   #define ICM20948_ADDR 0x68
   ICM20948_WE myIMU = ICM20948_WE(ICM20948_ADDR);
@@ -147,13 +149,7 @@ void initIMU(){
       }
     }
   }
-  // if(!myIMU.init()){
-  //   Serial.println("ERROR: ICM failed");
-  //   while(1);
-  // }
-  // else{
-  //   Serial.println("ICM initialized");
-  // }
+
   //test Magnometer exists and works
   if(!myIMU.initMagnetometer()){
     Serial.println("ERROR: Magnetometer failed");
@@ -162,6 +158,8 @@ void initIMU(){
   else{
     Serial.println("Magnetometer initialized");
   }
+
+  memset(imuBuffer, ' ', sizeof(imuBuffer)); // Set the imubuffer to null
 }
 
 void accelRangeSet(int range){
@@ -230,38 +228,38 @@ void calibrateIMU(){
   myIMU.setMagOpMode(AK09916_CONT_MODE_20HZ);
 }
 
-/*this function retrieves data collected by the IMU every few 
-  milliseconds and prints them to the SD card*/
-void gatherIMUdata(unsigned long currentTime){
-  int timer = millis(); //DEBUG
-  int timediff = 0; //DEBUG
+// /*this function retrieves data collected by the IMU every few 
+//   milliseconds and prints them to the SD card*/
+// void gatherIMUdata(unsigned long currentTime){
+//   int timer = millis(); //DEBUG
+//   int timediff = 0; //DEBUG
 
-  myfile=SD.open(IMUfilename,FILE_WRITE);
-  myIMU.readSensor();
-  xyzFloat gValue = myIMU.getAccRawValues();
-  xyzFloat gyr = myIMU.getGyrValues();
-  xyzFloat magValue = myIMU.getMagValues();
-  float magX = xMagGain*(magValue.x-xMagOffset);
-  float magY = yMagGain*(magValue.y-yMagOffset);
-  float magZ = zMagGain*(magValue.z-zMagOffset);
-  //display current time and IMU results on the IMU file
-  memset(buf, '\0', sizeof(buf));; //clear the buffer
-  sprintf(buf,"%lu, %.1f, %.1f, %.1f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f,",currentTime,gValue.x,gValue.y,gValue.z,gyr.x,gyr.y,gyr.z,magX,magY,magZ);
-  myfile.println(buf);
-  // IMU_Write_Counter++;
-  // if (IMU_Write_Counter > 200) {
-  //    myfile.flush();
-  //    IMU_Write_Counter = 0;
-  // }
-  timediff = millis() - timer;  //DEBUG
-  myfile.print("logtimer: "); //DEBUG
-  myfile.println(timediff); //DEBUG
-  myfile.flush();
-  myfile.close();
-}
+//   myfile=SD.open(IMUfilename,FILE_WRITE);
+//   myIMU.readSensor();
+//   xyzFloat gValue = myIMU.getAccRawValues();
+//   xyzFloat gyr = myIMU.getGyrValues();
+//   xyzFloat magValue = myIMU.getMagValues();
+//   float magX = xMagGain*(magValue.x-xMagOffset);
+//   float magY = yMagGain*(magValue.y-yMagOffset);
+//   float magZ = zMagGain*(magValue.z-zMagOffset);
+//   //display current time and IMU results on the IMU file
+//   memset(buf, '\0', sizeof(buf));; //clear the buffer
+//   sprintf(buf,"%lu, %.1f, %.1f, %.1f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f",currentTime,gValue.x,gValue.y,gValue.z,gyr.x,gyr.y,gyr.z,magX,magY,magZ);
+//   myfile.println(buf);
+//   // IMU_Write_Counter++;
+//   // if (IMU_Write_Counter > 200) {
+//   //    myfile.flush();
+//   //    IMU_Write_Counter = 0;
+//   // }
+//   timediff = millis() - timer;  //DEBUG
+//   myfile.print("logtimer: "); //DEBUG
+//   myfile.println(timediff); //DEBUG
+//   myfile.flush();
+//   myfile.close();
+// }
 
 void bufferIMUData(unsigned long currentTime) {
-  memset(imuBuffer[bufferIndex], 0, sizeof(imuBuffer[bufferIndex]));
+  // memset(imuBuffer[bufferIndex], 0, sizeof(imuBuffer[bufferIndex]));  //wipe a single line
   myIMU.readSensor();
   xyzFloat gValue = myIMU.getAccRawValues();
   xyzFloat gyr = myIMU.getGyrValues();
@@ -273,7 +271,11 @@ void bufferIMUData(unsigned long currentTime) {
   // Store in buffer
   sprintf(imuBuffer[bufferIndex], "%lu, %.1f, %.1f, %.1f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f",
           currentTime, gValue.x, gValue.y, gValue.z, gyr.x, gyr.y, gyr.z, magX, magY, magZ);
+  imuBuffer[bufferIndex][97] = '\r';  // Carriage return
+  imuBuffer[bufferIndex][98] = '\n';  // New line
+  imuBuffer[bufferIndex][99] = '\0';  // Null terminate
   bufferIndex++;
+
 
   // IMUtimebuffer[bufferIndex] = currentTime; // Store timestamp
   // IMUbuffer[bufferIndex][0] = gValue.x;
@@ -287,11 +289,11 @@ void bufferIMUData(unsigned long currentTime) {
   // IMUbuffer[bufferIndex][8] = magZ;
   // bufferIndex++;
 
-  // Check if buffer is full
-  if (bufferIndex >= IMUbufferSize) {
-      writeIMUDataToSD();
-      bufferIndex = 0;
-  }
+  // Check if buffer is full **MOVED to void loop func**
+  // if (bufferIndex >= IMUbufferSize) {
+  //     writeIMUDataToSD();
+  //     bufferIndex = 0;
+  // }
 }
 
 void writeIMUDataToSD() {
@@ -301,15 +303,20 @@ void writeIMUDataToSD() {
     // // Write IMU data
     // myfile.write((uint8_t*)IMUbuffer, bufferIndex * sizeof(IMUbuffer[0]));
   
-    for (int i = 0; i < bufferIndex; i++) {
-        myfile.println(imuBuffer[i]);
-        // myfile.print("\n");
-    }
+    // for (int i = 0; i < bufferIndex; i++) {
+    //     myfile.println(imuBuffer[i]);
+    //     // myfile.print("\n");
+    // }
+    myfile.write((uint8_t*)imuBuffer, bufferIndex * sizeof(imuBuffer[0]));
+
+    // myfile.println(millis());
     myfile.flush();
     myfile.close();
+    memset(imuBuffer, ' ', sizeof(imuBuffer)); //Wipe the buffer with null char
+
 }
 
-void flushRemainingData() { //FLAG 
+void flushRemainingData() { //FLAG *not used*
     if (bufferIndex > 0) {
         writeIMUDataToSD();
     }
@@ -744,6 +751,12 @@ float readBatteryVoltage(int numReadings) {
  *                                            SETUP
  * ----------------- ------------------ ------------------ ------------------ ------------------*/
 void setup() {
+  if(!silent_start){
+    tone(BUZZ_pin, 800);
+    delay(200);
+    noTone(BUZZ_pin);
+  }
+
   if(false){ //DEBUG - change argument to debug for deployment release.  Otherwise loops waiting for serial
     Serial.begin(115200);
     while(!Serial){
@@ -818,6 +831,7 @@ void setup() {
   analogWrite(recoveryLED_pin, 0);
 
   if(debug){delay(5000);}
+  sinceIMU=0; //reset IMU timer
 }
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
@@ -843,15 +857,18 @@ void loop() {
     }
   #endif
 
-    // Log IMU data
-    #ifdef PIMARONI
-      if ((currentTime - lastTime_IMU)>=IMU_UPDATE) {
-        // gatherIMUdata(currentTime);
-        bufferIMUData(currentTime);
-        lastTime_IMU = currentTime;
-        // Serial.print("IN IMU UPDATE time: ");   Serial.println(currentTime);
+  #ifdef PIMARONI
+    if ((sinceIMU)>=IMU_UPDATE) {
+      // gatherIMUdata(currentTime);
+      bufferIMUData(currentTime);
+      sinceIMU = sinceIMU - IMU_UPDATE;
+      // Serial.print("IN IMU UPDATE time: ");   Serial.println(currentTime);
+      if (bufferIndex >= IMUbufferSize) {
+        writeIMUDataToSD();
+        bufferIndex = 0;
       }
-    #endif
+    }
+  #endif
 
     // Send an RFM message to Base
   #ifdef SparkfunRFM
