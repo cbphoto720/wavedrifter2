@@ -36,6 +36,7 @@ unsigned long lastTime_IMU = 0;
 elapsedMillis sinceIMU;
 const unsigned int GPS_UPDATE = 250; //ms
 unsigned long lastTime_GPS = 0;
+elapsedMillis sinceGPS;
 const unsigned int RFM_UPDATE= 8000; //ms
 unsigned long lastTime_RFM = 0;
 const unsigned int SYSTEM_UPDATE = 1000; //ms
@@ -114,7 +115,7 @@ File myfile;
 const int SDpinCS = 5; // Pin 10 default on Teensy
 char buf[100] = {'\0'}; //DEBUG - sprinf needs a buffer char to store data!  figure out how big you want this to be
 // IMU buffer
-const int IMUbufferSize = 25; // Adjust based on how many readings you want to buffer
+const int IMUbufferSize = 50; // Adjust based on how many readings you want to buffer
 // float IMUbuffer[IMUbufferSize][9]; // 9 float values per entry
 // unsigned long IMUtimebuffer[IMUbufferSize];  // buffer for timestamps
 char imuBuffer[IMUbufferSize][100]; // Assuming 92 chars per line
@@ -259,7 +260,6 @@ void calibrateIMU(){
 // }
 
 void bufferIMUData(unsigned long currentTime) {
-  // memset(imuBuffer[bufferIndex], 0, sizeof(imuBuffer[bufferIndex]));  //wipe a single line
   myIMU.readSensor();
   xyzFloat gValue = myIMU.getAccRawValues();
   xyzFloat gyr = myIMU.getGyrValues();
@@ -269,54 +269,49 @@ void bufferIMUData(unsigned long currentTime) {
   float magZ = zMagGain * (magValue.z - zMagOffset);
 
   // Store in buffer
-  sprintf(imuBuffer[bufferIndex], "%lu, %.1f, %.1f, %.1f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f",
+  snprintf(imuBuffer[bufferIndex], 100, "%lu, %.1f, %.1f, %.1f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f",
           currentTime, gValue.x, gValue.y, gValue.z, gyr.x, gyr.y, gyr.z, magX, magY, magZ);
   imuBuffer[bufferIndex][97] = '\r';  // Carriage return
   imuBuffer[bufferIndex][98] = '\n';  // New line
   imuBuffer[bufferIndex][99] = '\0';  // Null terminate
   bufferIndex++;
 
-
-  // IMUtimebuffer[bufferIndex] = currentTime; // Store timestamp
-  // IMUbuffer[bufferIndex][0] = gValue.x;
-  // IMUbuffer[bufferIndex][1] = gValue.y;
-  // IMUbuffer[bufferIndex][2] = gValue.z;
-  // IMUbuffer[bufferIndex][3] = gyr.x;
-  // IMUbuffer[bufferIndex][4] = gyr.y;
-  // IMUbuffer[bufferIndex][5] = gyr.z;
-  // IMUbuffer[bufferIndex][6] = magX;
-  // IMUbuffer[bufferIndex][7] = magY;
-  // IMUbuffer[bufferIndex][8] = magZ;
-  // bufferIndex++;
-
-  // Check if buffer is full **MOVED to void loop func**
-  // if (bufferIndex >= IMUbufferSize) {
-  //     writeIMUDataToSD();
-  //     bufferIndex = 0;
-  // }
+  if (bufferIndex >= IMUbufferSize) {
+  writeIMUDataToSD();
+  }
 }
 
 void writeIMUDataToSD() {
     myfile = SD.open(IMUfilename, FILE_WRITE);
-    // // Write timestamps
-    // myfile.write((uint8_t*)IMUtimebuffer, bufferIndex * sizeof(unsigned long));
-    // // Write IMU data
-    // myfile.write((uint8_t*)IMUbuffer, bufferIndex * sizeof(IMUbuffer[0]));
   
-    // for (int i = 0; i < bufferIndex; i++) {
-    //     myfile.println(imuBuffer[i]);
-    //     // myfile.print("\n");
-    // }
     myfile.write((uint8_t*)imuBuffer, bufferIndex * sizeof(imuBuffer[0]));
 
-    // myfile.println(millis());
     myfile.flush();
     myfile.close();
-    memset(imuBuffer, ' ', sizeof(imuBuffer)); //Wipe the buffer with null char
-
+    memset(imuBuffer, ' ', sizeof(imuBuffer)); //Wipe the buffer with ' ' char
+    bufferIndex = 0;
 }
 
-void flushRemainingData() { //FLAG *not used*
+// void writeIMUDataToSD() {
+//     myfile = SD.open(IMUfilename, FILE_WRITE);
+//     // Calculate total length of valid data in the buffer
+//     int totalLength = 0;
+//     for (int i = 0; i < bufferIndex; i++) {
+//         totalLength += strlen(imuBuffer[i]);
+//     }
+//     // Write the entire valid data in one go
+//     myfile.write((uint8_t*)imuBuffer, totalLength);
+
+//     myfile.flush();
+//     myfile.close();
+    
+//     // Reset the buffer with spaces or null characters if needed
+//     memset(imuBuffer, ' ', sizeof(imuBuffer)); // Initialize with spaces to avoid unwanted characters
+//     bufferIndex = 0; // Reset buffer index
+// }
+
+
+void flushRemainingIMUData() { //FLAG *not used*
     if (bufferIndex > 0) {
         writeIMUDataToSD();
     }
@@ -755,6 +750,9 @@ void setup() {
     tone(BUZZ_pin, 800);
     delay(200);
     noTone(BUZZ_pin);
+    analogWrite(recoveryLED_pin, 10); //FLAG Do not set higher than 10 unless in low power mode
+    delay(10);
+    analogWrite(recoveryLED_pin, 0);
   }
 
   if(false){ //DEBUG - change argument to debug for deployment release.  Otherwise loops waiting for serial
@@ -810,19 +808,23 @@ void setup() {
     noTone(BUZZ_pin);
     delay(25);
     tone(BUZZ_pin, 1200);
+    analogWrite(recoveryLED_pin, 0);
     delay(75);
     noTone(BUZZ_pin);
     delay(25);
     tone(BUZZ_pin, 1800);
+    analogWrite(recoveryLED_pin, 10);
     delay(75);
     noTone(BUZZ_pin);
     delay(25);
     tone(BUZZ_pin, 2700);
+    analogWrite(recoveryLED_pin, 0);
     delay(75);
     noTone(BUZZ_pin);
     delay(250);
     noTone(BUZZ_pin);
     delay(75);
+    analogWrite(recoveryLED_pin, 10);
     tone(BUZZ_pin, 6400);
     delay(350);
     noTone(BUZZ_pin);
@@ -830,8 +832,14 @@ void setup() {
   digitalWrite(LED_pin, LOW);
   analogWrite(recoveryLED_pin, 0);
 
+  if(debug){
+    sinceGPS=-125; //reset GPS timer
+
+  }
+
   if(debug){delay(5000);}
   sinceIMU=0; //reset IMU timer
+  sinceGPS=0; //reset GPS timer //FLAG set GPS timer to 50% GPS_UPDATE to offset SD write cycle?
 }
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
@@ -850,10 +858,11 @@ void loop() {
   }
 
   #ifdef SparkfunGPS
-    if ((currentTime - lastTime_GPS)>=GPS_UPDATE) {
+    if ((sinceGPS)>=GPS_UPDATE) {
       myGNSS.checkUblox(); // Check for the arrival of new data and process it.
       myGNSS.checkCallbacks(); // Check if any callbacks are waiting to be processed.
-      lastTime_GPS = currentTime;
+      // lastTime_GPS = currentTime;
+      sinceGPS= sinceGPS - GPS_UPDATE;
     }
   #endif
 
@@ -863,10 +872,6 @@ void loop() {
       bufferIMUData(currentTime);
       sinceIMU = sinceIMU - IMU_UPDATE;
       // Serial.print("IN IMU UPDATE time: ");   Serial.println(currentTime);
-      if (bufferIndex >= IMUbufferSize) {
-        writeIMUDataToSD();
-        bufferIndex = 0;
-      }
     }
   #endif
 
@@ -889,4 +894,36 @@ void loop() {
       lastTime_RFM = currentTime;
     }
   #endif
+//FLAG work in progress -send drifter commands
+  // if (Serial.available() > 0) {
+  //   char input = Serial.read();
+  //   // Check if the input is a carriage return (end of the command)
+  //   if (input == '\r') {
+  //     commandBuffer[commandIndex] = '\0';  // Null-terminate the command string
+  //     // Compare the command with known commands
+  //     if (strcmp(commandBuffer, "shutdown") == 0) {
+  //       if (debug) { Serial.println("Shutting down..."); }
+  //       flushRemainingIMUData();
+  //       if (debug) { Serial.println("SHUTDOWN"); }
+  //       while(1);
+  //     }
+  //     else if (strcmp(commandBuffer, "recovery") == 0) {
+  //       // Handle recovery command
+  //     }
+  //     else if (strcmp(commandBuffer, "normal") == 0) {
+  //       // Handle normal mode command
+  //       // set IMU_UPDATE back to normal 
+  //     }
+  //     else {
+  //       Serial.println("Unknown command");
+  //     }
+  //     // Reset the command buffer and index
+  //     commandIndex = 0;
+  //     memset(commandBuffer, '\0', sizeof(commandBuffer));
+  //   } 
+  //   // Otherwise, store the character in the command buffer
+  //   else if (commandIndex < MAX_COMMAND_LENGTH - 1) {
+  //     commandBuffer[commandIndex++] = input;
+  //   }
+  // }
 }
