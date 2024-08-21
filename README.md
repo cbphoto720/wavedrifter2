@@ -4,6 +4,10 @@
 - [x] FIGURE OUT GPS/ICM CONNECTION ISSUES
 - [ ] write a new file if GPS / IMU log get too big?
 - [ ] Test the drifter2 Voltage sketch to see if it correctly reads the input voltage
+- [ ] check which the best clock speed for teensy to run
+- [ ] write null cleanup function as a drifter operation
+- [ ] work on GPS buffer and timing
+- [ ] work on more commands to send (beep 1s, recovery mode, flash LED 50% 1s)
 
 
 - [x] Come up with solution for QWIIC connector issues
