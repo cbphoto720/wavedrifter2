@@ -23,7 +23,7 @@ bool silent_start = false; // Disable buzzer on startup
 #define PoluluSD // Define MicroSD
 
 /* drifter identification number */
-const int drifterNumber = 1; // My node ID (1 to 254) (0 reserved for BASE STATION) (255 reserved for broadcast RFM)
+const int drifterNumber = 1; // My node ID (1 to 254) (0 reserved for BASE STATION) (255 reserved for broadcast to ALL)
 int filenumber=1;
 char IMUfilename[33];
 char GPSfilename[33];
@@ -121,6 +121,15 @@ const int IMUbufferSize = 50; // Adjust based on how many readings you want to b
 char imuBuffer[IMUbufferSize][100]; // Assuming 92 chars per line
 int bufferIndex = 0;
 
+/* Debugging variables */
+int time_in=0;
+int time_out=0;
+
+/* Comman Variables */
+#define MAX_COMMAND_LENGTH 20
+char commandBuffer[MAX_COMMAND_LENGTH];
+int commandIndex=0;
+
 /*------------------ ------------------ ------------------ ------------------ ------------------
  *                                IMU CODE Pimoroni
  * ----------------- ------------------ ------------------ ------------------ ------------------*/
@@ -160,7 +169,7 @@ void initIMU(){
     Serial.println("Magnetometer initialized");
   }
 
-  memset(imuBuffer, ' ', sizeof(imuBuffer)); // Set the imubuffer to null
+  memset(imuBuffer, '\0', sizeof(imuBuffer)); // Set the imubuffer to null
 }
 
 void accelRangeSet(int range){
@@ -271,13 +280,19 @@ void bufferIMUData(unsigned long currentTime) {
   // Store in buffer
   snprintf(imuBuffer[bufferIndex], 100, "%lu, %.1f, %.1f, %.1f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f",
           currentTime, gValue.x, gValue.y, gValue.z, gyr.x, gyr.y, gyr.z, magX, magY, magZ);
-  imuBuffer[bufferIndex][97] = '\r';  // Carriage return
-  imuBuffer[bufferIndex][98] = '\n';  // New line
-  imuBuffer[bufferIndex][99] = '\0';  // Null terminate
+  imuBuffer[bufferIndex][97] = '\0';  // New line
+  imuBuffer[bufferIndex][98] = '\r';  // New line
+  imuBuffer[bufferIndex][99] = '\n';  // Null terminate
   bufferIndex++;
 
   if (bufferIndex >= IMUbufferSize) {
-  writeIMUDataToSD();
+    if(debug){
+      time_in=millis();
+    }
+    writeIMUDataToSD();
+     if(debug){
+      time_out=millis()-time_in;
+    }
   }
 }
 
@@ -285,10 +300,16 @@ void writeIMUDataToSD() {
     myfile = SD.open(IMUfilename, FILE_WRITE);
   
     myfile.write((uint8_t*)imuBuffer, bufferIndex * sizeof(imuBuffer[0]));
+    if (debug) {
+        char timeStr[20];  // Buffer to hold the formatted time string
+        sprintf(timeStr, "$%d\r\n", time_out);  // Format the time with a $ prefix and newline
+        myfile.write(timeStr, strlen(timeStr));  // Write the time string to the SD card
+        memset(timeStr, ' ',sizeof(timeStr)); //reset timeStr
+    }
 
     myfile.flush();
     myfile.close();
-    memset(imuBuffer, ' ', sizeof(imuBuffer)); //Wipe the buffer with ' ' char
+    memset(imuBuffer, '\0', sizeof(imuBuffer)); //Wipe the buffer with ' ' char
     bufferIndex = 0;
 }
 
@@ -750,10 +771,10 @@ void setup() {
     tone(BUZZ_pin, 800);
     delay(200);
     noTone(BUZZ_pin);
-    analogWrite(recoveryLED_pin, 10); //FLAG Do not set higher than 10 unless in low power mode
-    delay(10);
-    analogWrite(recoveryLED_pin, 0);
   }
+  analogWrite(recoveryLED_pin, 10); //FLAG Do not set higher than 10 unless in low power mode
+  delay(10);
+  analogWrite(recoveryLED_pin, 0);
 
   if(false){ //DEBUG - change argument to debug for deployment release.  Otherwise loops waiting for serial
     Serial.begin(115200);
@@ -894,36 +915,36 @@ void loop() {
       lastTime_RFM = currentTime;
     }
   #endif
-//FLAG work in progress -send drifter commands
-  // if (Serial.available() > 0) {
-  //   char input = Serial.read();
-  //   // Check if the input is a carriage return (end of the command)
-  //   if (input == '\r') {
-  //     commandBuffer[commandIndex] = '\0';  // Null-terminate the command string
-  //     // Compare the command with known commands
-  //     if (strcmp(commandBuffer, "shutdown") == 0) {
-  //       if (debug) { Serial.println("Shutting down..."); }
-  //       flushRemainingIMUData();
-  //       if (debug) { Serial.println("SHUTDOWN"); }
-  //       while(1);
-  //     }
-  //     else if (strcmp(commandBuffer, "recovery") == 0) {
-  //       // Handle recovery command
-  //     }
-  //     else if (strcmp(commandBuffer, "normal") == 0) {
-  //       // Handle normal mode command
-  //       // set IMU_UPDATE back to normal 
-  //     }
-  //     else {
-  //       Serial.println("Unknown command");
-  //     }
-  //     // Reset the command buffer and index
-  //     commandIndex = 0;
-  //     memset(commandBuffer, '\0', sizeof(commandBuffer));
-  //   } 
-  //   // Otherwise, store the character in the command buffer
-  //   else if (commandIndex < MAX_COMMAND_LENGTH - 1) {
-  //     commandBuffer[commandIndex++] = input;
-  //   }
-  // }
+// FLAG work in progress -send drifter commands
+  if (Serial.available() > 0) {
+    char input = Serial.read();
+    // Check if the input is a carriage return (end of the command)
+    if (input == '\r') {
+      commandBuffer[commandIndex] = '\0';  // Null-terminate the command string
+      // Compare the command with known commands
+      if (strcmp(commandBuffer, "shutdown") == 0) {
+        if (debug) { Serial.println("Shutting down..."); }
+        flushRemainingIMUData();
+        if (debug) { Serial.println("SHUTDOWN"); }
+        while(1);
+      }
+      else if (strcmp(commandBuffer, "recovery") == 0) {
+        // Handle recovery command
+      }
+      else if (strcmp(commandBuffer, "normal") == 0) {
+        // Handle normal mode command
+        // set IMU_UPDATE back to normal 
+      }
+      else {
+        Serial.println("Unknown command: ignore input");
+      }
+      // Reset the command buffer and index
+      commandIndex = 0;
+      memset(commandBuffer, '\0', sizeof(commandBuffer));
+    } 
+    // Otherwise, store the character in the command buffer
+    else if (commandIndex < MAX_COMMAND_LENGTH - 1) {
+      commandBuffer[commandIndex++] = input;
+    }
+  }
 }
