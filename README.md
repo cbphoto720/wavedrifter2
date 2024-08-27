@@ -39,6 +39,7 @@
 - [ ] design new GPS antenna mount
 - [ ] stronger mounting of IMU
 - [ ] recovery LED mounting position
+- [ ] [IMU FIFO buffer information](https://web.archive.org/web/20240229060544/https://wolles-elektronikkiste.de/en/icm-20948-9-axis-sensor-part-ii)
 ____
 - [x]  cut the red wire inside one of your microUSB cables.  Use jumpers and power supply to spin up the box
 - RFM69 should be power by teensy onboard 3V supply (Likely cleaner than the FlipFlop board)

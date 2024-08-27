@@ -11,7 +11,7 @@
   - [x] read in broadcast strings from a drifter
   - [ ] handle broadcasts from multiple drifers (broadcast a timing command that sets each clock for broadcasting)
     - give a "token" to each drifter that gives it permission to broadcast
-  - [ ] relay broadcasts into external software for GPS mapping
+  - [ ] relay broadcasts into external software (Mission Planner) for GPS mapping
 
   Hardware Connections:
   - Sparkfun GPS board Ublox NEO-M8P-2 [TAOGLAS AGGP.25F.07.0060A antenna] (I2C) (Optional)
