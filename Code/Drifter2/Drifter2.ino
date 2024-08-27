@@ -332,7 +332,7 @@ void writeIMUDataToSD() {
 // }
 
 
-void flushRemainingIMUData() { //FLAG *not used*
+void flushRemainingIMUData() {
     if (bufferIndex > 0) {
         writeIMUDataToSD();
     }
@@ -819,6 +819,11 @@ void setup() {
     initmicroSD();
     initfiles(); // Create drifter new file on startup with config info and data headers
   #endif
+
+  //FLAG testing faster clock
+  // SPI.begin;
+  // SD.setClockDivider(SPI_CLOCK_DIV2); // Sets SPI clock (Teensy 4.0 default speed is 96 MHz / 4)
+
 
   // Startup sound (data is now logging)
   digitalWrite(LED_pin, HIGH);
