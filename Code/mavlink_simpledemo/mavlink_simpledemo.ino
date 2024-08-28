@@ -2,6 +2,8 @@
 // Remember that it's necessary to init and update git submodule
 #include "c_library_v2/common/mavlink.h"
 
+uint8_t totaldrifters=0; // the number of drifters this base station is tracking (updates once RFM connection is established)
+
 // Timing Variables
 const unsigned int heartbeat_interval= 1000;
 uint32_t lastTime_heartbeat = 0;
@@ -94,19 +96,33 @@ void send_all_parameters() {
 
 void send_battery_status(float voltage) {
     mavlink_message_t msg;
+    uint16_t voltages[10] = {UINT16_MAX}; // Initialize all cells to UINT16_MAX
     uint16_t voltage_mv = voltage * 1000; // Convert voltage to millivolts
+    voltages[0] = voltage_mv; // Assuming a single-cell battery, store total voltage in cell 0
 
-    mavlink_msg_sys_status_pack(
+    int16_t current_battery = -1; // Current in centiAmps, -1 if not measured
+    int32_t current_consumed = -1; // Charge consumed in mAh, -1 if not measured
+    int32_t energy_consumed = -1; // Energy consumed in hJ, -1 if not measured
+    int8_t battery_remaining = -1; // Battery remaining percentage, -1 if not measured
+
+    mavlink_msg_battery_status_pack(
         1, // system ID
         1, // component ID
         &msg,
-        0, // onboard control sensors present
-        0, // onboard control sensors enabled
-        0, // onboard control sensors health
-        voltage_mv, // battery voltage in millivoltsD
-        -1, // current (not being sent)
-        -1, // battery remaining (not being sent)
-        0, 0, 0, 0, 0, 0, 0, 0, 0 // other system status parameters
+        0, // Battery ID, usually 0 for a single battery system
+        MAV_BATTERY_FUNCTION_ALL, // Battery function (e.g., MAV_BATTERY_FUNCTION_ALL)
+        MAV_BATTERY_TYPE_LIPO, // Battery type (e.g., LiPo)
+        INT16_MAX, // Temperature, INT16_MAX if unknown
+        voltages, // Battery voltage array
+        current_battery, // Battery current in centiAmps
+        current_consumed, // Consumed charge in mAh
+        energy_consumed, // Consumed energy in hJ
+        battery_remaining, // Remaining battery percentage
+        0, // Remaining battery time in seconds, 0 if not available
+        MAV_BATTERY_CHARGE_STATE_OK, // Battery charge state (e.g., OK, low, critical)
+        {0}, // Extended battery voltages for cells 11-14 (set to 0)
+        0, // Battery mode (0 if not used)
+        0 // Fault/health bitmask (0 if not used)
     );
 
     uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
@@ -114,30 +130,30 @@ void send_battery_status(float voltage) {
     Serial.write(buffer, len);
 }
 
-void send_gps_status(int32_t lat, int32_t lon, int32_t alt, uint16_t hdop) {
-    mavlink_message_t msg;
+// void send_gps_status(int32_t lat, int32_t lon, int32_t alt, uint16_t hdop) {
+//     mavlink_message_t msg;
 
-    mavlink_msg_gps_raw_int_pack(
-        1, // system ID
-        1, // component ID
-        &msg,
-        millis(), // time since boot
-        3, // fix type (3D fix)
-        lat, // latitude in 1E7 degrees
-        lon, // longitude in 1E7 degrees
-        alt, // altitude in mm
-        65535, // GPS HDOP
-        65535, // VDOP
-        65535, // ground speed in cm/s
-        65535, // course over ground in centidegrees
-        hdop,  // Horizontal dilution of precision
-        10     // number of satellites visible
-    );
+//     mavlink_msg_gps_raw_int_pack(
+//         1, // system ID
+//         1, // component ID
+//         &msg,
+//         millis(), // time since boot
+//         3, // fix type (3D fix)
+//         lat, // latitude in 1E7 degrees
+//         lon, // longitude in 1E7 degrees
+//         alt, // altitude in mm
+//         65535, // GPS HDOP
+//         65535, // VDOP
+//         65535, // ground speed in cm/s
+//         65535, // course over ground in centidegrees
+//         hdop,  // Horizontal dilution of precision
+//         10     // number of satellites visible
+//     );
 
-    uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
-    uint16_t len = mavlink_msg_to_send_buffer(buffer, &msg);
-    Serial.write(buffer, len);
-}
+//     uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
+//     uint16_t len = mavlink_msg_to_send_buffer(buffer, &msg);
+//     Serial.write(buffer, len);
+// }
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
  *                                            SETUP
@@ -162,6 +178,7 @@ void loop() {
   // Send heartbeat via serial port
   if (current_time - lastTime_heartbeat > heartbeat_interval){
     send_heartbeat();
+    send_battery_status(voltage);
     lastTime_heartbeat=current_time;
   }
 
