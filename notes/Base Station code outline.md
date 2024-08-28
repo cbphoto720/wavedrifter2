@@ -10,3 +10,4 @@
 - [x] heartbeat
 - [x] report drifter health & location
 - [ ] send drifter commands (recovery, shutdown, etc.)
+- [ ] track last time drifter reached comms
