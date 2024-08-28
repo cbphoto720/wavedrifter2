@@ -3,6 +3,7 @@
 #include "c_library_v2/common/mavlink.h"
 
 uint8_t totaldrifters=0; // the number of drifters this base station is tracking (updates once RFM connection is established)
+uint8_t drifterIDs=[0]; // a list of ID numbers
 
 // Timing Variables
 const unsigned int heartbeat_interval= 1000;
@@ -58,9 +59,9 @@ void send_heartbeat() {
   if (mavlink_message_length == 0) { // Create message if not
     const int system_id = 1;
     const int component_id = 1;
-    const int mavlink_type = MAV_TYPE_GENERIC;
+    const int mavlink_type = MAV_TYPE_SUBMARINE;
     const int autopilot_type = MAV_AUTOPILOT_INVALID;
-    const int system_mode = MAV_MODE_PREFLIGHT;
+    const int system_mode = MAV_MODE_FLAG_HIL_ENABLED; //MAV_MODE_MANUAL_ARMED
     const int custom_mode = 0x0000; // No flag
     const int mavlink_state = MAV_STATE_ACTIVE;
     mavlink_msg_heartbeat_pack(
