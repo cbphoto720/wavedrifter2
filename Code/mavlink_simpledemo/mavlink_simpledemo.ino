@@ -21,10 +21,13 @@ const unsigned int heartbeat_interval= 1000;
 uint32_t lastTime_heartbeat = 0;
 
 // MavLink Custom parameters
-#define PARAM_COUNT 3
-const char* param_names[PARAM_COUNT] = {"PARAM1", "PARAM2", "PARAM3"};
-float param_values[PARAM_COUNT] = {1.0, 2.0, 3.0};
+const char* param_names[] = {"RECOVERY_BAT_VOLTAGE_TRIGGER", "SHUTDOWN_BAT_VOLTAGE_TRIGGER"};
+#define PARAM_COUNT (sizeof(param_names) / sizeof(param_names[0])) // Define PARAM_COUNT as the number of elements in the array
+float param_values[PARAM_COUNT] = {3.75, 3.7};
 
+/*------------------ ------------------ ------------------ ------------------ ------------------
+ *                                Helper Functions
+ * ----------------- ------------------ ------------------ ------------------ ------------------*/
 
 void updateDrifterData(uint8_t id, int32_t latitude, int32_t longitude, float battVoltage, char Program_Status) {
   bool drifterExists = false;
@@ -53,6 +56,11 @@ void updateDrifterData(uint8_t id, int32_t latitude, int32_t longitude, float ba
     }
   }
 }
+
+/*------------------ ------------------ ------------------ ------------------ ------------------
+ *                                RFM Functions
+ * ----------------- ------------------ ------------------ ------------------ ------------------*/
+
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
  *                                MavLink Functions
@@ -97,16 +105,6 @@ void send_heartbeat() {
   mavlink_message_t msg;
   uint8_t mavlink_message_buffer[MAVLINK_MAX_PACKET_LEN];
   uint16_t mavlink_message_length = 0;
-  //   const int system_id = DrifterID; // Use each drifter's ID as system_id
-  //   const int component_id = 1;
-  //   const int mavlink_type = MAV_TYPE_SUBMARINE;
-  //   const int autopilot_type = MAV_AUTOPILOT_INVALID;
-  //   const int system_mode = MAV_MODE_FLAG_HIL_ENABLED; //MAV_MODE_MANUAL_ARMED
-  //   const int custom_mode = 0x0000; // No flag
-  //   const int mavlink_state = MAV_STATE_ACTIVE;
-  //   mavlink_msg_heartbeat_pack(
-  //   system_id, component_id, &message, mavlink_type, autopilot_type, system_mode, custom_mode, mavlink_state
-  // );
   mavlink_msg_heartbeat_pack(
     drifterIDi, // Use each drifter's ID as system_id
     1,
@@ -158,54 +156,29 @@ void send_battery_status(float voltage) {
     int8_t battery_remaining = -1; // Battery remaining percentage, -1 if not measured
 
     mavlink_msg_battery_status_pack(
-        drifterIDi, // system ID
-        1, // component ID
+        drifterIDi,                  // system ID
+        1,                           // component ID
         &msg,
-        0, // Battery ID, usually 0 for a single battery system
-        MAV_BATTERY_FUNCTION_ALL, // Battery function (e.g., MAV_BATTERY_FUNCTION_ALL)
-        MAV_BATTERY_TYPE_LIPO, // Battery type (e.g., LiPo)
-        INT16_MAX, // Temperature, INT16_MAX if unknown
-        voltages, // Battery voltage array
-        current_battery, // Battery current in centiAmps
-        current_consumed, // Consumed charge in mAh
-        energy_consumed, // Consumed energy in hJ
-        battery_remaining, // Remaining battery percentage
-        0, // Remaining battery time in seconds, 0 if not available
+        0,                           // Battery ID, usually 0 for a single battery system
+        MAV_BATTERY_FUNCTION_ALL,    // Battery function (e.g., MAV_BATTERY_FUNCTION_ALL)
+        MAV_BATTERY_TYPE_LIPO,       // Battery type (e.g., LiPo)
+        INT16_MAX,                   // Temperature, INT16_MAX if unknown
+        voltages,                    // Battery voltage array
+        current_battery,             // Battery current in centiAmps
+        current_consumed,            // Consumed charge in mAh
+        energy_consumed,             // Consumed energy in hJ
+        battery_remaining,           // Remaining battery percentage
+        0,                           // Remaining battery time in seconds, 0 if not available
         MAV_BATTERY_CHARGE_STATE_OK, // Battery charge state (e.g., OK, low, critical)
-        {0}, // Extended battery voltages for cells 11-14 (set to 0)
-        0, // Battery mode (0 if not used)
-        0 // Fault/health bitmask (0 if not used)
+        {0},                         // Extended battery voltages for cells 11-14 (set to 0)
+        0,                           // Battery mode (0 if not used)
+        0                            // Fault/health bitmask (0 if not used)
     );
 
     uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
     uint16_t len = mavlink_msg_to_send_buffer(buffer, &msg);
     Serial.write(buffer, len);
 }
-
-// void send_gps_status(int32_t lat, int32_t lon, int32_t alt, uint16_t hdop) {
-//     mavlink_message_t msg;
-
-//     mavlink_msg_gps_raw_int_pack(
-//         1, // system ID
-//         1, // component ID
-//         &msg,
-//         millis(), // time since boot
-//         3, // fix type (3D fix)
-//         lat, // latitude in 1E7 degrees
-//         lon, // longitude in 1E7 degrees
-//         alt, // altitude in mm
-//         65535, // GPS HDOP
-//         65535, // VDOP
-//         65535, // ground speed in cm/s
-//         65535, // course over ground in centidegrees
-//         hdop,  // Horizontal dilution of precision
-//         10     // number of satellites visible
-//     );
-
-//     uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
-//     uint16_t len = mavlink_msg_to_send_buffer(buffer, &msg);
-//     Serial.write(buffer, len);
-// }
 
 void send_gps_position(int32_t lat, int32_t lon) {
     mavlink_message_t msg;
