@@ -239,7 +239,7 @@ void calibrateIMU(){
 }
 
 // /*this function retrieves data collected by the IMU every few 
-//   milliseconds and prints them to the SD card*/
+//   milliseconds and prints them to the SD card.  It is inconsistent and inefficient*/
 // void gatherIMUdata(unsigned long currentTime){
 //   int timer = millis(); //DEBUG
 //   int timediff = 0; //DEBUG

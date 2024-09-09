@@ -8,11 +8,11 @@ struct DrifterData{ // Data to capture from each Drifter RFM signal
   int32_t lon;
   float voltage;
   char Program_Status; // 'G' - go (recording data), 'R' - recovery, 'S' - shutdown
-  // potentially track: millis() time since last RFM signal (or use UTC time since last signal)
+  elapsedMillis sinceRFM; //track: millis() time since last RFM signal (or use UTC time since last signal)
 };
 
 #define MAX_NUM_DRIFTERS 12
-DrifterData drifters[MAX_NUM_DRIFTERS]; // Up to 12 drifters that have sent RFM signals to base
+DrifterData drifters[MAX_NUM_DRIFTERS];
 uint8_t drifterIDi=0; // current IDX to send mssgs
 uint8_t totalnumdrifters=0; // the true length of drifterIDs
 
@@ -85,17 +85,26 @@ void decode_messages() {
         case MAVLINK_MSG_ID_PARAM_REQUEST_LIST:
           send_all_parameters();
           break;
-        // case MAVLINK_MSG_ID_COMMAND_LONG:
-        //   mavlink_command_long_t command;
-        //   mavlink_msg_command_long_decode(&message, &command);
-        //   if (command.command == MAV_CMD_REQUEST_MESSAGE && 
-        //       command.param1 == MAVLINK_MSG_ID_GPS_RAW_INT) {
-        //       // Send the GPS position when requested
-        //       send_gps_status(current_lat, current_lon, current_alt, current_hdop);
-        //   }
-        //   break;
+        case MAVLINK_MSG_ID_COMMAND_LONG:{
+          // Decode COMMAND_LONG message
+          mavlink_command_long_t cmd;
+          mavlink_msg_command_long_decode(&message, &cmd);
+          if (cmd.command == MAV_CMD_DO_SET_HOME) {           // Check if the command is MAV_CMD_DO_SET_HOME
+            if (cmd.param1 == 1) { // param1 == 1 means set to specific coordinates
+              float home_lat = cmd.param5; // Latitude
+              float home_lon = cmd.param6; // Longitude
+              float home_alt = cmd.param7; // Altitude
+
+              // Call your function to set the home position
+              set_home_position(home_lat, home_lon, home_alt);
+
+              // Optionally, send acknowledgment
+              send_command_ack(message.sysid, message.compid, MAV_CMD_DO_SET_HOME, MAV_RESULT_ACCEPTED);
+            }
+          }
+        } break;
         default:
-            break;
+          break;
       }
     }
   }
@@ -117,6 +126,15 @@ void send_heartbeat() {
   );
   mavlink_message_length = mavlink_msg_to_send_buffer(mavlink_message_buffer, &msg);
   Serial.write(mavlink_message_buffer, mavlink_message_length);
+}
+
+void send_command_ack(uint8_t system_id, uint8_t component_id, uint16_t command, uint8_t result) {
+    mavlink_message_t ack_msg;
+    mavlink_msg_command_ack_pack(system_id, component_id, &ack_msg, command, result);
+    
+    uint8_t mavlink_message_buffer[MAVLINK_MAX_PACKET_LEN];
+    uint16_t mavlink_message_length = mavlink_msg_to_send_buffer(mavlink_message_buffer, &ack_msg);
+    Serial.write(mavlink_message_buffer, mavlink_message_length);
 }
 
 // void sampleincomingRFM(){
@@ -175,9 +193,9 @@ void send_battery_status(float voltage) {
         0                            // Fault/health bitmask (0 if not used)
     );
 
-    uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
-    uint16_t len = mavlink_msg_to_send_buffer(buffer, &msg);
-    Serial.write(buffer, len);
+    uint8_t mavlink_message_buffer[MAVLINK_MAX_PACKET_LEN];
+    uint16_t mavlink_message_length = mavlink_msg_to_send_buffer(mavlink_message_buffer, &msg);
+    Serial.write(mavlink_message_buffer, mavlink_message_length);
 }
 
 void send_gps_position(int32_t lat, int32_t lon) {
@@ -197,9 +215,9 @@ void send_gps_position(int32_t lat, int32_t lon) {
         0,                 // velocity in Z direction (set to 0 if not used)
         UINT16_MAX         // heading in centidegrees (set to UINT16_MAX if not used)
     );
-    uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
-    uint16_t len = mavlink_msg_to_send_buffer(buffer, &msg);
-    Serial.write(buffer, len);
+    uint8_t mavlink_message_buffer[MAVLINK_MAX_PACKET_LEN];
+    uint16_t mavlink_message_length = mavlink_msg_to_send_buffer(mavlink_message_buffer, &msg);
+    Serial.write(mavlink_message_buffer, mavlink_message_length);
 }
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
