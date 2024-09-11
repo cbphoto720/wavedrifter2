@@ -14,6 +14,7 @@
 #include <SPI.h>
 #include <SD.h>
 #include <Wire.h>
+#include <elapsedMillis.h> //Flag remove extraneous libraries.  just do the math it is probably just as fast
 
 bool debug = true; //DEBUG: TRUE enables Serial messages and extra data.
 bool silent_start = false; // Disable buzzer on startup
@@ -631,7 +632,7 @@ void initRFM(){
   //FLAG this is a simple test startup.  Include more startup info like bat voltage, device mode, etc
   sprintf(sendbuffer,"D%01d:SU,,,,,%.2fV", drifterNumber, VOLTAGE); // sendlength 22 long
   if (USEACK){
-    if (radio.sendWithRetry(BASEID, sendbuffer, sizeof(sendbuffer), 10))
+    if (radio.sendWithRetry(BASEID, sendbuffer, strlen(sendbuffer), 10))
       Serial.println("Coms established with base");
     else
       Serial.println("ERROR: unable to establish coms to Base");
@@ -768,6 +769,11 @@ float readBatteryVoltage(int numReadings) {
  *                                            SETUP
  * ----------------- ------------------ ------------------ ------------------ ------------------*/
 void setup() {
+  // Set all ellapsedMillis to allocate
+  sinceIMU=0; 
+  sinceGPS=0; 
+  sinceUTC = 0;
+
   if(!silent_start){
     tone(BUZZ_pin, 800);
     delay(200);
@@ -859,10 +865,10 @@ void setup() {
   digitalWrite(LED_pin, LOW);
   analogWrite(recoveryLED_pin, 0);
 
-  if(debug){
-    sinceGPS=-125; //reset GPS timer
+  // if(debug){
+  //   sinceGPS=-125; //reset GPS timer
 
-  }
+  // }
 
   if(debug){delay(5000);}
   sinceIMU=0; //reset IMU timer
@@ -906,22 +912,22 @@ void loop() {
   #ifdef SparkfunRFM
     if((currentTime - lastTime_RFM)>=RFM_UPDATE){
       //FLAG: configure 'sendbuffer' and 'sendlength'
-      sprintf(sendbuffer,"Drifter clock: %lu",currentTime);
+      sprintf(sendbuffer,"D%01d:LOG,%.6f,%.6f,%lu,%.2fV", drifterNumber, lastlatitude, lastlongitude, (unsigned long)sinceUTC , VOLTAGE);
       if (USEACK){
-        if (radio.sendWithRetry(BASEID, sendbuffer, sizeof(sendbuffer), 10)){
-          if(debug){Serial.println("Success!  ACK received");}
-        }
-        else{
-          if(debug){Serial.println("ERROR: [RFM] no ACK received");}
-        }
+        if (radio.sendWithRetry(BASEID, sendbuffer, strlen(sendbuffer), 10))
+          Serial.println("SUCCESS: message sent to base");
+        else
+          Serial.println("ERROR: unable to reach Base");
       }
       else{
+        // If you don't need acknowledgements, just use send():
         radio.send(BASEID, sendbuffer, sizeof(sendbuffer));
       }
       lastTime_RFM = currentTime;
     }
   #endif
-// FLAG work in progress -send drifter commands
+
+// FLAG work in progress -send drifter commands through serial terminal
   if (Serial.available() > 0) {
     char input = Serial.read();
     // Check if the input is a carriage return (end of the command)
@@ -930,7 +936,10 @@ void loop() {
       // Compare the command with known commands
       if (strcmp(commandBuffer, "shutdown") == 0) {
         if (debug) { Serial.println("Shutting down..."); }
-        flushRemainingIMUData();
+        #ifdef PoluluSD
+          flushRemainingIMUData();
+        #endif
+        //FLAG do other shutdown steps (low power GPS)
         if (debug) { Serial.println("SHUTDOWN"); }
         while(1);
       }
