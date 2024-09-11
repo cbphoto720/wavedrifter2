@@ -1,11 +1,11 @@
 # WIP
+- [ ] LoRA underwater trails!! See [links on this page](https://www.thethingsnetwork.org/forum/t/lora-under-water/41144/26?page=2)
 - [x] solder recovery LED to test on breadboard
 - [x] more clearance for coin cell bat on sparkfun M8P board
 - [x] FIGURE OUT GPS/ICM CONNECTION ISSUES
 - [ ] write a new file if GPS / IMU log get too big?
-- [ ] Test the drifter2 Voltage sketch to see if it correctly reads the input voltage
+- [x] Test the drifter2 Voltage sketch to see if it correctly reads the input voltage
 - [ ] check which the best clock speed for teensy to run
-- [ ] write null cleanup function as a drifter operation
 - [ ] work on GPS buffer and timing
 - [ ] work on more commands to send (beep 1s, recovery mode, flash LED 50% 1s)
 
@@ -28,6 +28,11 @@
 - [ ] Base station code to run into mission planner
 - view GPS updates
 - [ ] post photos and write assembly guide
+
+# Code
+### Speed
+**RFM**
+- test if using strlen is faster than using sizeof buffer.  (better to send the null chars or to calculate message size before sending it)
 
 # Tests
 - [ ] buoyancy test of drifter2.0
@@ -258,8 +263,8 @@ Housing2_rev2 uses a 2-224 o-ring
 
 TRANSMIT MESSAGE:
 
-| UTC TIME | LAT | LON | # Sats | age (GPS data) |     | Bat voltage | GPS Freq. | **ATC setting | checksum |
-| -------- | --- | --- | ------ | -------------- | --- | ----------- | --------- | ------------- | -------- |
+| D# (Drifter #) | STATUS ('STR' Startup, 'LOG' (recording data), 'REC' (recovery), 'OFF' (shutdown)) | LAT | LON | age (GPS data) | Bat voltage |
+| -------------- | ---------------------------------------------------------------------------------- | --- | --- | -------------- | ----------- |
 **ATC - Auto Transmission Control**
 - set RSSI floor to at least -60dBm, may want to disable to not try to broadcast too quietly
 - [Regulater PSU tutorial sparkfun](https://www.sparkfun.com/tutorials/103)
