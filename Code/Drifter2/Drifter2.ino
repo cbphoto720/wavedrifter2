@@ -17,10 +17,10 @@
 
 bool debug = true; //DEBUG: TRUE enables Serial messages and extra data.
 bool silent_start = false; // Disable buzzer on startup
-#define PIMARONI // Define IMU
+// #define PIMARONI // Define IMU
 // #define SparkfunGPS // Define GPS
-//#define SparkfunRFM // Define RFM
-#define PoluluSD // Define MicroSD
+#define SparkfunRFM // Define RFM
+// #define PoluluSD // Define MicroSD
 
 /* drifter identification number */
 const int drifterNumber = 1; // My node ID (1 to 254) (0 reserved for BASE STATION) (255 reserved for broadcast to ALL)
@@ -41,6 +41,11 @@ const unsigned int RFM_UPDATE= 8000; //ms
 unsigned long lastTime_RFM = 0;
 const unsigned int SYSTEM_UPDATE = 1000; //ms
 unsigned long lastTime_System = 0;
+
+float lastlatitude = 0;
+float lastlongitude = 0;
+uint8_t LastUTC[4]; //FLAG.  handle UTC time offset for comms with multiple drifters
+elapsedMillis sinceUTC;
 
 const int VOLTpin = 16; // Voltage
 const int LED_pin = 22;  // Indicator LED
@@ -137,11 +142,11 @@ int commandIndex=0;
  /*IMU initializtion functions*/
 //this function checks that the IMU is working
 void initIMU(){
-  Wire.beginTransmission(ICM20948_ADDR);
-  int error = Wire.endTransmission();
-  if(error == 0){
-    Serial.println("ICM detected on bus");
-  }
+  // Wire.beginTransmission(ICM20948_ADDR);
+  // int error = Wire.endTransmission();
+  // if(error == 0){
+  //   Serial.println("ICM detected on bus");
+  // }
   
   int linecount=0;
   Serial.println("waiting for ICM");
@@ -152,13 +157,9 @@ void initIMU(){
     if(linecount==250){
       Serial.println("waiting for ICM");
       linecount=0;
-      Wire.beginTransmission(ICM20948_ADDR);
-      int error = Wire.endTransmission();
-      if(error == 0){
-        Serial.println("ICM detected on bus");
-      }
     }
   }
+  Serial.println("IMU initialized");
 
   //test Magnometer exists and works
   if(!myIMU.initMagnetometer()){
@@ -391,13 +392,7 @@ void initGPS(){
       linecount=0;
     }
   }
-  if(!myGNSS.begin()){
-    Serial.println("ERROR: GPS failed");
-    while(1);
-  } 
-  else{
-    Serial.println("GPS initialized");
-  }
+  Serial.println("GPS initialized");
 
   // Configure the GPS settings
   SendGPSconfiguration(); // Use Binary to send a bunch of configurations to the M8P
@@ -527,17 +522,29 @@ void printGNGGA(NMEA_GGA_data_t *nmeaData){
   for (int i = 0; nmeaData->nmea[i] != '\n'; i++) {
     process=nmea.process((char)nmeaData->nmea[i]);
   }
-  if(process){
+  if (process) {
     Serial.print("Valid fix: ");
     Serial.println(nmea.isValid() ? "yes" : "no");
+    if(nmea.isValid()){
+      lastLatitude = nmea.getLatitude() / 1000000.0;
+      lastLongitude = nmea.getLongitude() / 1000000.0;
+      LastUTC[0] = nmea.getHour(); //GGA hhmmss.sss
+      LastUTC[1] = nmea.getMinute();
+      LastUTC[2] = nmea.getSecond();
+      LastUTC[3] = nmea.getHundredths();
 
-    float latitude_mdeg = nmea.getLatitude();
-    float longitude_mdeg = nmea.getLongitude();
-    Serial.print("Latitude (deg): ");
-    Serial.println(latitude_mdeg / 1000000., 6);
+      sinceUTC = 0; // update last time since valid fix.
 
-    Serial.print("Longitude (deg): ");
-    Serial.println(longitude_mdeg / 1000000., 6);
+      if(debug){
+        Serial.print("Latitude (deg): ");
+        Serial.println(lastLatitude, 6);
+        Serial.print("Longitude (deg): ");
+        Serial.println(lastLongitude, 6);
+        Serial.print("UTC Time: ");
+        Serial.println(lastUTC);
+        
+      }
+    }
   }
 }
 
@@ -614,12 +621,6 @@ void initRFM(){
       linecount=0;
     }
   }
-  if(!radio.initialize(FREQUENCY,MYNODEID,NETWORKID)){
-    Serial.println("ERROR: [RFM] RFM initialize failed");
-    while(1);
-  } else{
-    Serial.println("RFM initialized");
-  }
   radio.setHighPower(); //always set high power for HCW varient
   radio.encrypt(ENCRYPTKEY);
 
@@ -628,7 +629,7 @@ void initRFM(){
   #endif 
   
   //FLAG this is a simple test startup.  Include more startup info like bat voltage, device mode, etc
-  sprintf(sendbuffer,"$SIO Drifter%01d reboot", drifterNumber); // sendlength 22 long
+  sprintf(sendbuffer,"D%01d:SU,,,,,%.2fV", drifterNumber, VOLTAGE); // sendlength 22 long
   if (USEACK){
     if (radio.sendWithRetry(BASEID, sendbuffer, sizeof(sendbuffer), 10))
       Serial.println("Coms established with base");
