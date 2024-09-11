@@ -21,7 +21,7 @@
 #include <RFM69.h>
 #include <RFM69_ATC.h>
 #include <SPI.h>
-#include <mavlink.h>
+// #include <mavlink.h>
 
 /* RFM */
 #define NETWORKID     10   // Must be the same for all nodes (0 to 255)
@@ -160,10 +160,10 @@ void loop()
     }
   }
   
-  int drifterID;
-    char utcTime[20];
-    float lat, lon, voltage;
-    if (parseGPSData(gpsData, drifterID, utcTime, lat, lon, voltage)) {
-      sendGPSData(lat, lon);
-    }
+  // int drifterID;
+  //   char utcTime[20];
+  //   float lat, lon, voltage;
+  //   if (parseGPSData(gpsData, drifterID, utcTime, lat, lon, voltage)) {
+  //     sendGPSData(lat, lon);
+  //   }
 }

@@ -7,7 +7,7 @@ struct DrifterData{ // Data to capture from each Drifter RFM signal
   int32_t lat;
   int32_t lon;
   float voltage;
-  char Program_Status; // 'G' - go (recording data), 'R' - recovery, 'S' - shutdown
+  char Program_Status; // 'STR' Startup, 'LOG' (recording data), 'REC' (recovery), 'OFF' (shutdown)
   elapsedMillis sinceRFM; //track: millis() time since last RFM signal (or use UTC time since last signal)
 };
 
