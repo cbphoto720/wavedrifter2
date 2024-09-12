@@ -412,14 +412,9 @@ void initGPS(){
 }
 
 void printRAWX(UBX_RXM_RAWX_data_t rawxData){
-  Serial.print(F("\r\nRAWX: Length: "));
-  Serial.print(rawxData.header.numMeas); 
-
-  if (rawxData.header.numMeas > 0) {
-    double prMesValue;
-    memcpy(&prMesValue, rawxData.blocks[0].prMes, sizeof(prMesValue));
-    Serial.print(F("\r\nBlock 0 prMes: "));
-    Serial.println(prMesValue, 6); // Print with 6 decimal places
+  if(debug){ // print RAWX recieved
+    Serial.print(F("\r\nRAWX: Length: "));
+    Serial.print(rawxData.header.numMeas); 
   }
 
   // Write data to SD card
@@ -427,65 +422,64 @@ void printRAWX(UBX_RXM_RAWX_data_t rawxData){
     int timer = millis();
     int timediff = 0;
     myfile = SD.open(GPSfilename, FILE_WRITE);  
-    // Convert rcvTow to double
-    double rcvTowValue;
-    memcpy(&rcvTowValue, rawxData.header.rcvTow, sizeof(rcvTowValue));
-    
-    // Write header information
-    myfile.print(rcvTowValue, 6);
-    myfile.print(',');
-    myfile.print(rawxData.header.week);
-    myfile.print(',');
-    myfile.print(rawxData.header.leapS);
-    myfile.print(',');
-    myfile.println(rawxData.header.numMeas);
+    static char buffer[128];  // Allocate buffer.  See u-blox_structs.h for byte size info
+    // const uint16_t UBX_RXM_RAWX_MAX_LEN = 16 + (32 * 92); 92+16=118
 
-    // Write block information
-    for (int i = 0; i < rawxData.header.numMeas; i++) {
-      if(debug){ //DEBUG -play buzzer when collecting raw data
-        tone(BUZZ_pin, 800);
-        delay(10);
-        noTone(BUZZ_pin);
+    // Format the header data into the buffer
+    double rcvTowValue;  // Convert rcvTow to double
+    memcpy(&rcvTowValue, rawxData.header.rcvTow, sizeof(rcvTowValue));
+    int len = snprintf(buffer, sizeof(buffer), "%.6f,%d,%d,%d\n", 
+                      rcvTowValue, 
+                      rawxData.header.week, 
+                      rawxData.header.leapS, 
+                      rawxData.header.numMeas);
+    // Write the header to the file
+    if (len > 0 && len < sizeof(buffer)) {
+        myfile.write(buffer, len);  // Only write the actual content, not the full buffer size
+    } else { // Buffer size is too small or another error occured
+      if(debug){
+        Serial.print('ERROR: [GPS] cannot compose rawx file write. len = ');
+        Serial.println(len);
       }
-      double prMesValue, cpMesValue, doMesValue;
+    }
+
+    // Write block information from each Satallite
+    for (int i = 0; i < rawxData.header.numMeas; i++) {
+      double prMesValue, cpMesValue, doMesValue; // decode RAWX bytes into double variable
       memcpy(&prMesValue, rawxData.blocks[i].prMes, sizeof(prMesValue));
       memcpy(&cpMesValue, rawxData.blocks[i].cpMes, sizeof(cpMesValue));
       memcpy(&doMesValue, rawxData.blocks[i].doMes, sizeof(doMesValue));
-      
-      myfile.print(i);  // print datablock#
-      myfile.print(',');
-      myfile.print(prMesValue);
-      myfile.print(',');
-      myfile.print(cpMesValue);
-      myfile.print(',');
-      myfile.print(doMesValue);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].gnssId);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].svId);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].sigId);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].freqId);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].lockTime);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].cno);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].prStdev);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].cpStdev);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].doStdev);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].trkStat.bits.prValid);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].trkStat.bits.cpValid);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].trkStat.bits.halfCyc);
-      myfile.print(',');
-      myfile.println(rawxData.blocks[i].trkStat.bits.subHalfCyc);
-      //SPEED - use an snprintf block with pre-allocated buffer to make one SD write
+      // Format the data into the buffer
+      int len = snprintf(buffer, sizeof(buffer),
+                        "%d,%f,%f,%f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+                        i,
+                        prMesValue,
+                        cpMesValue,
+                        doMesValue,
+                        rawxData.blocks[i].gnssId,
+                        rawxData.blocks[i].svId,
+                        rawxData.blocks[i].sigId,
+                        rawxData.blocks[i].freqId,
+                        rawxData.blocks[i].lockTime,
+                        rawxData.blocks[i].cno,
+                        rawxData.blocks[i].prStdev,
+                        rawxData.blocks[i].cpStdev,
+                        rawxData.blocks[i].doStdev,
+                        rawxData.blocks[i].trkStat.bits.prValid,
+                        rawxData.blocks[i].trkStat.bits.cpValid,
+                        rawxData.blocks[i].trkStat.bits.halfCyc,
+                        rawxData.blocks[i].trkStat.bits.subHalfCyc
+      );
+      // Write the buffer to the file
+      if (len > 0 && len < sizeof(buffer)) {
+        myfile.write(buffer, len);
+      }
+      else{ // Buffer size is too small or another error occured
+        if(debug){
+          Serial.print('ERROR: [GPS] cannot compose rawx file write. len = ');
+          Serial.println(len);
+        }
+      }
     }
     timediff = millis() - timer;  //DEBUG
     myfile.print("logtimer: "); //DEBUG
