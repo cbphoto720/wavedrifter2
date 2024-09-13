@@ -23,7 +23,7 @@ uint32_t lastTime_heartbeat = 0;
 // MavLink Custom parameters
 const char* param_names[] = {"RECOVERY_BAT_VOLTAGE_TRIGGER", "SHUTDOWN_BAT_VOLTAGE_TRIGGER"};
 #define PARAM_COUNT (sizeof(param_names) / sizeof(param_names[0])) // Define PARAM_COUNT as the number of elements in the array
-float param_values[PARAM_COUNT] = {3.75, 3.7};
+float param_values[PARAM_COUNT] = {3.5, 3.22};
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
  *                                Helper Functions
