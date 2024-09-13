@@ -10,7 +10,7 @@
   - Sparkfun RFM69HCW Wireless Transceiver - 915MHz (SPI)
   - Pololu MicroSD breakout board (SPI)
 */
-
+#define DRIFTER2_VERSION "1.11"
 #include <SPI.h>
 #include <SD.h>
 #include <Wire.h>
@@ -31,6 +31,7 @@ char GPSfilename[33];
 
 /*global variables*/
 float VOLTAGE = 0; // Battery voltage (V)
+char DRIFTER_STATUS[3] = "STR";
 unsigned long currentTime = 0;
 const unsigned int IMU_UPDATE = 40; //ms
 unsigned long lastTime_IMU = 0;
@@ -91,7 +92,8 @@ const int BUZZ_pin = 1; // Buzzer
 #ifdef SparkfunRFM
   #include <RFM69.h>
   #include <RFM69_ATC.h>
-  char sendbuffer[60]; // 62 bytes is max transmission size
+  char sendbuffer[60]; // Buffer for RFM
+  const size_t sendbuffer_size = sizeof(sendbuffer); // max transmission size per packet
   int sendlength = 0; // = sizeof(sendbuffer)
 
   #define NETWORKID     10   // Must be the same for all nodes (0 to 255)
@@ -282,7 +284,7 @@ void bufferIMUData(unsigned long currentTime) {
   // Store in buffer
   snprintf(imuBuffer[bufferIndex], 100, "%lu, %.1f, %.1f, %.1f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f",
           currentTime, gValue.x, gValue.y, gValue.z, gyr.x, gyr.y, gyr.z, magX, magY, magZ);
-  imuBuffer[bufferIndex][97] = '\0';  // New line
+  imuBuffer[bufferIndex][97] = '\0';  // New line //FLAG is this new line termination correct? will it ever write over data?
   imuBuffer[bufferIndex][98] = '\r';  // New line
   imuBuffer[bufferIndex][99] = '\n';  // Null terminate
   bufferIndex++;
@@ -423,18 +425,19 @@ void printRAWX(UBX_RXM_RAWX_data_t rawxData){
     int timediff = 0;
     myfile = SD.open(GPSfilename, FILE_WRITE);  
     static char buffer[128];  // Allocate buffer.  See u-blox_structs.h for byte size info
+    const size_t buffer_size = sizeof(buffer);
     // const uint16_t UBX_RXM_RAWX_MAX_LEN = 16 + (32 * 92); 92+16=118
 
     // Format the header data into the buffer
     double rcvTowValue;  // Convert rcvTow to double
     memcpy(&rcvTowValue, rawxData.header.rcvTow, sizeof(rcvTowValue));
-    int len = snprintf(buffer, sizeof(buffer), "%.6f,%d,%d,%d\n", 
+    int len = snprintf(buffer, buffer_size, "%.6f,%d,%d,%d\n", 
                       rcvTowValue, 
                       rawxData.header.week, 
                       rawxData.header.leapS, 
                       rawxData.header.numMeas);
     // Write the header to the file
-    if (len > 0 && len < sizeof(buffer)) {
+    if (len > 0 && len < buffer_size) {
         myfile.write(buffer, len);  // Only write the actual content, not the full buffer size
     } else { // Buffer size is too small or another error occured
       if(debug){
@@ -450,7 +453,7 @@ void printRAWX(UBX_RXM_RAWX_data_t rawxData){
       memcpy(&cpMesValue, rawxData.blocks[i].cpMes, sizeof(cpMesValue));
       memcpy(&doMesValue, rawxData.blocks[i].doMes, sizeof(doMesValue));
       // Format the data into the buffer
-      int len = snprintf(buffer, sizeof(buffer),
+      int len = snprintf(buffer, buffer_size,
                         "%d,%f,%f,%f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
                         i,
                         prMesValue,
@@ -471,7 +474,7 @@ void printRAWX(UBX_RXM_RAWX_data_t rawxData){
                         rawxData.blocks[i].trkStat.bits.subHalfCyc
       );
       // Write the buffer to the file
-      if (len > 0 && len < sizeof(buffer)) {
+      if (len > 0 && len < buffer_size) {
         myfile.write(buffer, len);
       }
       else{ // Buffer size is too small or another error occured
@@ -825,6 +828,7 @@ void setup() {
   // SPI.begin;
   // SD.setClockDivider(SPI_CLOCK_DIV2); // Sets SPI clock (Teensy 4.0 default speed is 96 MHz / 4)
 
+  DRIFTER_STATUS = "LOG";
 
   // Startup sound (data is now logging)
   digitalWrite(LED_pin, HIGH);
@@ -906,7 +910,7 @@ void loop() {
   #ifdef SparkfunRFM
     if((currentTime - lastTime_RFM)>=RFM_UPDATE){
       //FLAG: configure 'sendbuffer' and 'sendlength'
-      sprintf(sendbuffer,"D%01d:LOG,%.6f,%.6f,%lu,%.2fV", drifterNumber, lastlatitude, lastlongitude, (unsigned long)sinceUTC , VOLTAGE);
+      int len = snprintf(sendbuffer,sendbuffer_size,"%s,%.6f,%.6f,%lu,%.2fV", DRIFTER_STATUS, lastlongitude, (unsigned long)sinceUTC , VOLTAGE); // ~ 32 bytes
       if (USEACK){
         if (radio.sendWithRetry(BASEID, sendbuffer, strlen(sendbuffer), 10))
           Serial.println("SUCCESS: message sent to base");
@@ -915,7 +919,7 @@ void loop() {
       }
       else{
         // If you don't need acknowledgements, just use send():
-        radio.send(BASEID, sendbuffer, sizeof(sendbuffer));
+        radio.send(BASEID, sendbuffer, strlen(sendbuffer));
       }
       lastTime_RFM = currentTime;
     }
@@ -935,6 +939,7 @@ void loop() {
         #endif
         //FLAG do other shutdown steps (low power GPS)
         if (debug) { Serial.println("SHUTDOWN"); }
+        DRIFTER_STATUS = "OFF";
         while(1);
       }
       else if (strcmp(commandBuffer, "recovery") == 0) {
