@@ -116,9 +116,7 @@ ____
 - Wave-detect transmission
 	look at IMU data to detect a wave, use wave as an opportunity to transmit/look for GPS from a taller height off the water
 # Componets
-
-# VHB tape
-0.4" x 0.025" (10.16 x 0.635 mm)
+- VHB tape: 0.4" x 0.025" (10.16 x 0.635 mm)
 ## GPS
 **glonass**
 - 1598-1604 MHz
@@ -244,9 +242,6 @@ Housing2_rev2 uses a 2-224 o-ring
 ## LED
 - [1.5 W COB LED](https://www.digikey.com/en/products/detail/creeled,-inc./JK3030AWT-P-H50EA0000-N0000001/9974567?utm_adgroup=&utm_source=google&utm_medium=cpc&utm_campaign=Pmax_Shopping_Boston%20Metro%20Category%20Awareness&utm_term=&utm_content=&utm_id=go_cmp-20837509568_adg-_ad-__dev-c_ext-_prd-9974567_sig-Cj0KCQjw0_WyBhDMARIsAL1Vz8t7g8jTEnTvU7pAn2EhZ3dJouXCVCa7Tl-RsGRhepSoWFnkOTOHie8aAs1fEALw_wcB&gad_source=1&gclid=Cj0KCQjw0_WyBhDMARIsAL1Vz8t7g8jTEnTvU7pAn2EhZ3dJouXCVCa7Tl-RsGRhepSoWFnkOTOHie8aAs1fEALw_wcB) run with arduino +extra flip flop board.
 - [0.5W LED amazon](https://www.amazon.com/dp/B01CUGACEA/?coliid=IID4XTLLN0KJC&colid=T766DFYAY5YQ&ref_=list_c_wl_lv_ov_lig_dp_it&th=1)
-- 
-# Electronics
-- [ ] use [0.4" VHB tape](https://www.amazon.com/HitLights-Heavy-Double-Sided-Mounting/dp/B00PKI7IBG/ref=sr_1_2_sspa?crid=JABCASGN92ZW&dib=eyJ2IjoiMSJ9.Ij13Xm94FJr9PZn3aLfDPpOQpL0kG5guXpqFnrtxxAo5pK2Q5xUq0yUacQFbH-zSo2QgTBg_bFVhZWLL-Znq0wfS8BC_IIrBnbxDLqBdnO8Q-igDLeg4ONUTyYlpehOxUtNNXOFM6gMl7QsNsprx0l6HpbT-qT5OGABhd3b-VqpXe6xpUZdOO1sgo6wEzFaCYfCxRTW95CfyDyXYOm13IduR5LlephxemCihyQlua-s.dAm5T6WgCvachPD-ag3WeXT6-WCDmPzvjQ7tvbSkYTM&dib_tag=se&keywords=vhb%2Btape&qid=1708546653&sprefix=vhb%2Btpa%2Caps%2C279&sr=8-2-spons&sp_csd=d2lkZ2V0TmFtZT1zcF9hdGY&th=1) to mount teensy
 
 # Programming
 
