@@ -31,8 +31,9 @@ struct DrifterData{ // Data to capture from each Drifter RFM signal
   uint8_t drifterID;
   int32_t lat;
   int32_t lon;
-  float voltage;
-  char Program_Status; // 'STR' Startup, 'LOG' (recording data), 'REC' (recovery), 'OFF' (shutdown)
+  uint32_t lastUTC;
+  int16_t voltage;
+  char Drifter_Status[3]; // 'STR' Startup, 'LOG' (recording data), 'REC' (recovery), 'OFF' (shutdown)
   elapsedMillis sinceRFM; //track: millis() time since last RFM signal (or use UTC time since last signal)
 };
 
@@ -40,6 +41,7 @@ struct DrifterData{ // Data to capture from each Drifter RFM signal
 DrifterData drifters[MAX_NUM_DRIFTERS];
 uint8_t drifterIDi=0; // current IDX to send mssgs
 uint8_t totalnumdrifters=0; // the true length of drifterIDs
+DrifterData parsedData; // Temp holder for parsed data
 
 // Timing Variables
 const unsigned int heartbeat_interval= 1000;
@@ -79,14 +81,20 @@ float param_values[PARAM_COUNT] = {3.78, 3.7};
  *                                Helper Functions
  * ----------------- ------------------ ------------------ ------------------ ------------------*/
 
-bool parseGPSData(const char* gpsData, int &drifterID, char* utcTime, float &lat, float &lon, float &voltage) {
-  // Assuming GPS data is received as a comma-separated string "DrifterID#,UTCtime,Lat,Lon,Voltage"
-  int parsed = sscanf(gpsData, "%d,%19[^,],%f,%f,%f", &drifterID, utcTime, &lat, &lon, &voltage);
+bool parserfmessage(const char* rfmessage, parsedData &drifter) {
+  float lat, lon; //Temp float vars
+  int parsed = sscanf(rfmessage, ""%s,%d,%d,%lu,%.2fV"", &drifter.Drifter_Status, &lat, &lon, &drifter.lastUTC, &drifter.voltage);
+  // Convert latitude from float to int32_t (in millionths)
+  drifter.lat = (int32_t)(lat * 1000000);
+  drifter.lon = (int32_t)(lon * 1000000);
+
   return (parsed == 5);
 }
 
 void updateDrifterData(uint8_t id, int32_t latitude, int32_t longitude, float battVoltage, char Program_Status) {
   bool drifterExists = false;
+  //FLAG: function relies on drifters structure being initialized.  Could be more efficient to use a point in this function
+
   //check if drifterID already exists
   for (uint8_t i = 0; i < MAX_NUM_DRIFTERS; i++) {
     if (drifters[i].drifterID == id) {
@@ -139,6 +147,35 @@ void initRFM(){
   #endif
 
   Serial.println("SUCCESS: RFM69 radio init OK!");
+}
+
+void handleIncomingDrifterRFM(const char* rfmessage){
+  char rfmData[radio.DATALEN + 1];  // Create a buffer for the incoming data
+  memcpy(rfmData, radio.DATA, radio.DATALEN);  // Copy the received data into the buffer
+  rfmData[radio.DATALEN] = '\0';  // Null-terminate the string
+
+  if (radio.ACKRequested()) { // Send the ACK as soon as message is in buffer
+    radio.sendACK();
+    Serial.println("Data recieved, ACK sent:");
+  }
+
+  //Print out message for serial readability
+  Serial.print("(Drifter ");
+  Serial.print(radio.SENDERID, DEC);
+  Serial.print("): [");
+  Serial.print(rfmData);
+  Serial.print("], RSSI ");
+  Serial.println(radio.RSSI);
+
+  // Parse the message
+  if (parserfmessage(rfmessage, parsedData)) { // if the rfmessage is successfully parsed
+    parsedData.drifterID=radio.SENDERID;
+    updateDrifterData(parsedData.drifterID, parsedData.lat, 
+                      parsedData.lon, parsedData.voltage, 
+                      parsedData.Program_Status);
+  } else {
+    Serial.println("Error: Failed to parse GPS data");
+  }
 }
 
 void sendcommand(){
@@ -375,24 +412,28 @@ void loop()
     }
   }
 
-  // RECEIVING
-  if (radio.receiveDone()) // Got one!
-  {    
-    Serial.print("(Drifter ");
-    Serial.print(radio.SENDERID, DEC);
-    Serial.print("): [");
-    
-    for (byte i = 0; i < radio.DATALEN; i++)
-      Serial.print((char)radio.DATA[i]);
-          
-    Serial.print("], RSSI ");
-    Serial.println(radio.RSSI);
-    
-    if (radio.ACKRequested())
-    {
-      radio.sendACK();
-      Serial.println("ACK sent");
-    }
+  if (radio.receiveDone()) { // If we receive data
+    handleIncomingDrifterRFM(radio.Data)
   }
+
+  // // RECEIVING
+  // if (radio.receiveDone()) // Got one!
+  // {    
+  //   Serial.print("(Drifter ");
+  //   Serial.print(radio.SENDERID, DEC);
+  //   Serial.print("): [");
+    
+  //   for (byte i = 0; i < radio.DATALEN; i++)
+  //     Serial.print((char)radio.DATA[i]);
+          
+  //   Serial.print("], RSSI ");
+  //   Serial.println(radio.RSSI);
+    
+  //   if (radio.ACKRequested())
+  //   {
+  //     radio.sendACK();
+  //     Serial.println("ACK sent");
+  //   }
+  // }
   
 }

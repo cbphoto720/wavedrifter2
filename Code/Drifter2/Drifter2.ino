@@ -524,8 +524,8 @@ void printGNGGA(NMEA_GGA_data_t *nmeaData){
     Serial.print("Valid fix: ");
     Serial.println(nmea.isValid() ? "yes" : "no");
     if(nmea.isValid()){
-      lastLatitude = nmea.getLatitude() / 1000000.0;
-      lastLongitude = nmea.getLongitude() / 1000000.0;
+      lastLatitude = nmea.getLatitude();
+      lastLongitude = nmea.getLongitude();
       LastUTC[0] = nmea.getHour(); //GGA hhmmss.sss
       LastUTC[1] = nmea.getMinute();
       LastUTC[2] = nmea.getSecond();
@@ -910,7 +910,7 @@ void loop() {
   #ifdef SparkfunRFM
     if((currentTime - lastTime_RFM)>=RFM_UPDATE){
       //FLAG: configure 'sendbuffer' and 'sendlength'
-      int len = snprintf(sendbuffer,sendbuffer_size,"%s,%.6f,%.6f,%lu,%.2fV", DRIFTER_STATUS, lastlongitude, (unsigned long)sinceUTC , VOLTAGE); // ~ 32 bytes
+      int len = snprintf(sendbuffer,sendbuffer_size,"%s,%d,%d,%lu,%.2fV", DRIFTER_STATUS, lastlongitude, lastlatitude, (unsigned long)sinceUTC , VOLTAGE); // ~ 32 bytes
       if (USEACK){
         if (radio.sendWithRetry(BASEID, sendbuffer, strlen(sendbuffer), 10))
           Serial.println("SUCCESS: message sent to base");
