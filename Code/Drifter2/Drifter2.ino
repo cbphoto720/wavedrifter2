@@ -937,10 +937,17 @@ void loop() {
         #ifdef PoluluSD
           flushRemainingIMUData();
         #endif
+        #ifdef SparkfunGPS
+        uint8_t UBXdataToSend[] = {
+          0xB5, 0x62, 0x06, 0x04, 0x04, 0x00, 0x00, 0x00, 0x08, 0x00, 0x16, 0x74 //Stop GNSS with Hotstart option
+        };
+        GPSbinaryWrite(UBXdataToSend, sizeof(UBXdataToSend));
+        #endif
+
         //FLAG do other shutdown steps (low power GPS)
         if (debug) { Serial.println("SHUTDOWN"); }
         DRIFTER_STATUS = "OFF";
-        while(1);
+        while(1); // is this the best way to handle shutdown?  what about setting update rates to maxval?
       }
       else if (strcmp(commandBuffer, "recovery") == 0) {
         // Handle recovery command
