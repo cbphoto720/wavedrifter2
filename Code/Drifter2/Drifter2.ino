@@ -18,10 +18,10 @@
 
 bool debug = true; //DEBUG: TRUE enables Serial messages and extra data.
 bool silent_start = false; // Disable buzzer on startup
-// #define PIMARONI // Define IMU
-// #define SparkfunGPS // Define GPS
+#define PIMARONI // Define IMU
+#define SparkfunGPS // Define GPS
 #define SparkfunRFM // Define RFM
-// #define PoluluSD // Define MicroSD
+#define PoluluSD // Define MicroSD
 
 /* drifter identification number */
 const int drifterNumber = 1; // My node ID (1 to 254) (0 reserved for BASE STATION) (255 reserved for broadcast to ALL)
@@ -31,7 +31,7 @@ char GPSfilename[33];
 
 /*global variables*/
 float VOLTAGE = 0; // Battery voltage (V)
-char DRIFTER_STATUS[3] = "STR";
+char DRIFTER_STATUS[4] = "STR";
 unsigned long currentTime = 0;
 const unsigned int IMU_UPDATE = 40; //ms
 unsigned long lastTime_IMU = 0;
@@ -828,7 +828,7 @@ void setup() {
   // SPI.begin;
   // SD.setClockDivider(SPI_CLOCK_DIV2); // Sets SPI clock (Teensy 4.0 default speed is 96 MHz / 4)
 
-  DRIFTER_STATUS = "LOG";
+  strcpy(DRIFTER_STATUS, "OFF");
 
   // Startup sound (data is now logging)
   digitalWrite(LED_pin, HIGH);
@@ -910,7 +910,8 @@ void loop() {
   #ifdef SparkfunRFM
     if((currentTime - lastTime_RFM)>=RFM_UPDATE){
       //FLAG: configure 'sendbuffer' and 'sendlength'
-      int len = snprintf(sendbuffer,sendbuffer_size,"%s,%d,%d,%lu,%.2fV", DRIFTER_STATUS, lastlongitude, lastlatitude, (unsigned long)sinceUTC , VOLTAGE); // ~ 32 bytes
+      int len = snprintf(sendbuffer,sendbuffer_size,"%s,%f,%f,%lu,%.2fV", DRIFTER_STATUS, lastlongitude, lastlatitude, (unsigned long)sinceUTC , VOLTAGE); // ~ 32 bytes 
+      //FLAG: fix lastlon and lastlat data type representation in snprintf
       if (USEACK){
         if (radio.sendWithRetry(BASEID, sendbuffer, strlen(sendbuffer), 10))
           Serial.println("SUCCESS: message sent to base");
@@ -946,22 +947,22 @@ void loop() {
 
         //FLAG do other shutdown steps (low power GPS)
         if (debug) { Serial.println("SHUTDOWN"); }
-        DRIFTER_STATUS = "OFF";
-        while(1); // is this the best way to handle shutdown?  what about setting update rates to maxval?
-      }
-      else if (strcmp(commandBuffer, "recovery") == 0) {
-        // Handle recovery command
-      }
-      else if (strcmp(commandBuffer, "normal") == 0) {
-        // Handle normal mode command
-        // set IMU_UPDATE back to normal 
-      }
-      else {
-        Serial.println("Unknown command: ignore input");
-      }
-      // Reset the command buffer and index
-      commandIndex = 0;
-      memset(commandBuffer, '\0', sizeof(commandBuffer));
+          strcpy(DRIFTER_STATUS, "OFF");
+          while(1); // is this the best way to handle shutdown?  what about setting update rates to maxval?
+        }
+        else if (strcmp(commandBuffer, "recovery") == 0) {
+          // Handle recovery command
+        }
+        else if (strcmp(commandBuffer, "normal") == 0) {
+          // Handle normal mode command
+          // set IMU_UPDATE back to normal 
+        }
+        else {
+          Serial.println("Unknown command: ignore input");
+        }
+        // Reset the command buffer and index
+        commandIndex = 0;
+        memset(commandBuffer, '\0', sizeof(commandBuffer));
     } 
     // Otherwise, store the character in the command buffer
     else if (commandIndex < MAX_COMMAND_LENGTH - 1) {

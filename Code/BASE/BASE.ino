@@ -33,7 +33,7 @@ struct DrifterData{ // Data to capture from each Drifter RFM signal
   int32_t lon;
   uint32_t lastUTC;
   int16_t voltage;
-  char Drifter_Status[3]; // 'STR' Startup, 'LOG' (recording data), 'REC' (recovery), 'OFF' (shutdown)
+  char Drifter_Status[4]; // 'STR' Startup, 'LOG' (recording data), 'REC' (recovery), 'OFF' (shutdown)
   elapsedMillis sinceRFM; //track: millis() time since last RFM signal (or use UTC time since last signal)
 };
 
@@ -81,9 +81,9 @@ float param_values[PARAM_COUNT] = {3.78, 3.7};
  *                                Helper Functions
  * ----------------- ------------------ ------------------ ------------------ ------------------*/
 
-bool parserfmessage(const char* rfmessage, parsedData &drifter) {
+bool parserfmessage(const char* rfmessage, DrifterData &drifter) {
   float lat, lon; //Temp float vars
-  int parsed = sscanf(rfmessage, ""%s,%d,%d,%lu,%.2fV"", &drifter.Drifter_Status, &lat, &lon, &drifter.lastUTC, &drifter.voltage);
+  int parsed = sscanf(rfmessage, "%3s,%f,%f,%lu,%.2fV", drifter.Drifter_Status, &lat, &lon, &drifter.lastUTC, &drifter.voltage);
   // Convert latitude from float to int32_t (in millionths)
   drifter.lat = (int32_t)(lat * 1000000);
   drifter.lon = (int32_t)(lon * 1000000);
@@ -91,7 +91,7 @@ bool parserfmessage(const char* rfmessage, parsedData &drifter) {
   return (parsed == 5);
 }
 
-void updateDrifterData(uint8_t id, int32_t latitude, int32_t longitude, float battVoltage, char Program_Status) {
+void updateDrifterData(uint8_t id, int32_t latitude, int32_t longitude, float battVoltage, char Drifter_Status[4]) {
   bool drifterExists = false;
   //FLAG: function relies on drifters structure being initialized.  Could be more efficient to use a point in this function
 
@@ -101,12 +101,16 @@ void updateDrifterData(uint8_t id, int32_t latitude, int32_t longitude, float ba
       drifters[i].lat = latitude;
       drifters[i].lon = longitude;
       drifters[i].voltage = battVoltage;
-      drifters[i].Program_Status= Program_Status;
+      // Copy Drifter_Status safely
+      strncpy(drifters[i].Drifter_Status, Drifter_Status, sizeof(drifters[i].Drifter_Status) - 1);
+      drifters[i].Drifter_Status[sizeof(drifters[i].Drifter_Status) - 1] = '\0'; // Ensure null termination
       drifterExists = true;
       break;
     }
   }
   // If the drifterID does not exist, add a new entry
+  //FLAG: is this extraneous?  Just iterated through all drifter vals before this?
+  // Should you check if it exists first and then run your iteration?
   if (!drifterExists) {
     for (uint8_t i = 0; i < 12; i++) {
       if (drifters[i].drifterID == 0) { // Check for an uninitialized slot
@@ -114,7 +118,9 @@ void updateDrifterData(uint8_t id, int32_t latitude, int32_t longitude, float ba
         drifters[i].lat = latitude;
         drifters[i].lon = longitude;
         drifters[i].voltage = battVoltage;
-        drifters[i].Program_Status= Program_Status;
+        // Copy Drifter_Status safely
+      strncpy(drifters[i].Drifter_Status, Drifter_Status, sizeof(drifters[i].Drifter_Status) - 1);
+      drifters[i].Drifter_Status[sizeof(drifters[i].Drifter_Status) - 1] = '\0'; // Ensure null termination
         break;
       }
     }
@@ -172,15 +178,15 @@ void handleIncomingDrifterRFM(const char* rfmessage){
     parsedData.drifterID=radio.SENDERID;
     updateDrifterData(parsedData.drifterID, parsedData.lat, 
                       parsedData.lon, parsedData.voltage, 
-                      parsedData.Program_Status);
+                      parsedData.Drifter_Status);
   } else {
     Serial.println("Error: Failed to parse GPS data");
   }
 }
 
-void sendcommand(){
-  break; //FLAG [WIP] send drifter a command (like setting program status or flashing a light)
-}
+// void sendcommand(){
+//   break; //FLAG [WIP] send drifter a command (like setting program status or flashing a light)
+// }
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
  *                                MavLink Functions
@@ -230,7 +236,8 @@ void handle_command_long(const mavlink_message_t& message) {
       float home_alt = cmd.param7; // Altitude
 
       // Set the home position
-      set_home_position(home_lat, home_lon, home_alt);
+      // set_home_position(home_lat, home_lon, home_alt);
+      //FLAG: Set home position variables are unused.
 
       // Optionally, send acknowledgment
       send_command_ack(message.sysid, message.compid, MAV_CMD_DO_SET_HOME, MAV_RESULT_ACCEPTED);
@@ -258,12 +265,21 @@ void send_heartbeat() {
 
 void send_command_ack(uint8_t system_id, uint8_t component_id, uint16_t command, uint8_t result) {
     mavlink_message_t ack_msg;
-    mavlink_msg_command_ack_pack(system_id, component_id, &ack_msg, command, result);
+    
+    // Fill in additional required parameters
+    uint8_t progress = 255;        // 255 indicates "unknown progress"
+    uint32_t result_param2 = 0;    // No additional result information for now
+    uint8_t target_system = system_id;   // Set to the same system_id
+    uint8_t target_component = component_id; // Set to the same component_id
+    
+    // Call the function with all required parameters
+    mavlink_msg_command_ack_pack(system_id, component_id, &ack_msg, command, result, progress, result_param2, target_system, target_component);
     
     uint8_t mavlink_message_buffer[MAVLINK_MAX_PACKET_LEN];
     uint16_t mavlink_message_length = mavlink_msg_to_send_buffer(mavlink_message_buffer, &ack_msg);
     Serial.write(mavlink_message_buffer, mavlink_message_length);
 }
+
 
 void send_all_parameters() {
   mavlink_message_t msg;
@@ -370,6 +386,7 @@ void loop()
   
   // Send heartbeat via serial port
   if (current_time - lastTime_heartbeat > heartbeat_interval){ // On a 1 hz interval:
+    Serial.println("HB");
     for(uint8_t i = 0; i < MAX_NUM_DRIFTERS; i++) { // loop through each connected drifterID
       if (drifters[i].drifterID != 0) {
         drifterIDi=drifters[i].drifterID; // set system ID to current drifter
@@ -413,7 +430,8 @@ void loop()
   }
 
   if (radio.receiveDone()) { // If we receive data
-    handleIncomingDrifterRFM(radio.Data)
+    Serial.println("reading incoming data");
+    handleIncomingDrifterRFM((const char*)radio.DATA);
   }
 
   // // RECEIVING
