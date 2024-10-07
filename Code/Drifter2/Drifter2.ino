@@ -949,17 +949,17 @@ void loop() {
         if (debug) { Serial.println("SHUTDOWN"); }
           strcpy(DRIFTER_STATUS, "OFF");
           while(1); // is this the best way to handle shutdown?  what about setting update rates to maxval?
-        }
-        else if (strcmp(commandBuffer, "recovery") == 0) {
-          // Handle recovery command
-        }
-        else if (strcmp(commandBuffer, "normal") == 0) {
-          // Handle normal mode command
-          // set IMU_UPDATE back to normal 
-        }
-        else {
-          Serial.println("Unknown command: ignore input");
-        }
+      }
+      else if (strcmp(commandBuffer, "recovery") == 0) {
+        // Handle recovery command
+      }
+      else if (strcmp(commandBuffer, "normal") == 0) {
+        // Handle normal mode command
+        // set IMU_UPDATE back to normal 
+      }
+      else {
+        Serial.println("Unknown command: ignore input");
+      }
         // Reset the command buffer and index
         commandIndex = 0;
         memset(commandBuffer, '\0', sizeof(commandBuffer));
