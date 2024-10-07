@@ -96,7 +96,7 @@ void decode_messages() {
               float home_alt = cmd.param7; // Altitude
 
               // Call your function to set the home position
-              set_home_position(home_lat, home_lon, home_alt);
+              // set_home_position(home_lat, home_lon, home_alt);
 
               // Optionally, send acknowledgment
               send_command_ack(message.sysid, message.compid, MAV_CMD_DO_SET_HOME, MAV_RESULT_ACCEPTED);
@@ -130,7 +130,15 @@ void send_heartbeat() {
 
 void send_command_ack(uint8_t system_id, uint8_t component_id, uint16_t command, uint8_t result) {
     mavlink_message_t ack_msg;
-    mavlink_msg_command_ack_pack(system_id, component_id, &ack_msg, command, result);
+    
+    // Fill in additional required parameters
+    uint8_t progress = 255;        // 255 indicates "unknown progress"
+    uint32_t result_param2 = 0;    // No additional result information for now
+    uint8_t target_system = system_id;   // Set to the same system_id
+    uint8_t target_component = component_id; // Set to the same component_id
+    
+    // Call the function with all required parameters
+    mavlink_msg_command_ack_pack(system_id, component_id, &ack_msg, command, result, progress, result_param2, target_system, target_component);
     
     uint8_t mavlink_message_buffer[MAVLINK_MAX_PACKET_LEN];
     uint16_t mavlink_message_length = mavlink_msg_to_send_buffer(mavlink_message_buffer, &ack_msg);
