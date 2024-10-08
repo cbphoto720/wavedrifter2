@@ -938,15 +938,26 @@ void loop() {
         #ifdef PoluluSD
           flushRemainingIMUData();
         #endif
+        #ifdef PIMARONI  // Put the IMU into low-power mode
+          imu.setSleepMode(true);
+          imu.setCycleMode(false); // Disables the IMU cycle mode if previously enabled
+          if (debug) {Serial.println("IMU is in low power mode.");}
+        #endif
         #ifdef SparkfunGPS
-        uint8_t UBXdataToSend[] = {
-          0xB5, 0x62, 0x06, 0x04, 0x04, 0x00, 0x00, 0x00, 0x08, 0x00, 0x16, 0x74 //Stop GNSS with Hotstart option
-        };
-        GPSbinaryWrite(UBXdataToSend, sizeof(UBXdataToSend));
+          uint8_t UBXdataToSend[] = {
+            0xB5, 0x62, 0x06, 0x04, 0x04, 0x00, 0x00, 0x00, 0x08, 0x00, 0x16, 0x74 //Stop GNSS with Hotstart option
+          };
+          GPSbinaryWrite(UBXdataToSend, sizeof(UBXdataToSend));
+          if (debug) {Serial.println("GPS is in low power mode");}
+        #endif
+        #ifdef SparkfunRFM
+          radio.sleep();
+          // Optionally, add a debug message to confirm shutdown
+          if (debug) {Serial.println("RFM69 is in low power mode");}
         #endif
 
         //FLAG do other shutdown steps (low power GPS)
-        if (debug) { Serial.println("SHUTDOWN"); }
+        if (debug) { Serial.println("FINISHED SHUTDOWN"); }
           strcpy(DRIFTER_STATUS, "OFF");
           while(1); // is this the best way to handle shutdown?  what about setting update rates to maxval?
       }

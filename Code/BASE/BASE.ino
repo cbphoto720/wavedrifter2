@@ -378,7 +378,6 @@ void setup()
 void loop()
 {
   // Set up a "buffer" for characters that we'll send:
-  
   static char sendbuffer[62];
   static int sendlength = 0;
 
