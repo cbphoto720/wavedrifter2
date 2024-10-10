@@ -10,35 +10,44 @@
   - Sparkfun RFM69HCW Wireless Transceiver - 915MHz (SPI)
   - Pololu MicroSD breakout board (SPI)
 */
-
+#define DRIFTER2_VERSION "1.13"
 #include <SPI.h>
 #include <SD.h>
 #include <Wire.h>
+#include <elapsedMillis.h> //Flag remove extraneous libraries.  just do the math it is probably just as fast
 
 bool debug = true; //DEBUG: TRUE enables Serial messages and extra data.
 bool silent_start = false; // Disable buzzer on startup
 #define PIMARONI // Define IMU
 #define SparkfunGPS // Define GPS
-//#define SparkfunRFM // Define RFM
+#define SparkfunRFM // Define RFM
 #define PoluluSD // Define MicroSD
 
 /* drifter identification number */
-const int drifterNumber = 1; // My node ID (1 to 254) (0 reserved for BASE STATION) (255 reserved for broadcast RFM)
+const int drifterNumber = 1; // My node ID (1 to 254) (0 reserved for BASE STATION) (255 reserved for broadcast to ALL)
 int filenumber=1;
 char IMUfilename[33];
 char GPSfilename[33];
 
 /*global variables*/
 float VOLTAGE = 0; // Battery voltage (V)
+char DRIFTER_STATUS[4] = "STR";
 unsigned long currentTime = 0;
 const unsigned int IMU_UPDATE = 40; //ms
 unsigned long lastTime_IMU = 0;
+elapsedMillis sinceIMU;
 const unsigned int GPS_UPDATE = 250; //ms
 unsigned long lastTime_GPS = 0;
+elapsedMillis sinceGPS;
 const unsigned int RFM_UPDATE= 8000; //ms
 unsigned long lastTime_RFM = 0;
 const unsigned int SYSTEM_UPDATE = 1000; //ms
 unsigned long lastTime_System = 0;
+
+long lastlatitude = 0;
+long lastlongitude = 0;
+uint8_t lastUTC[4]; //FLAG.  handle UTC time offset for comms with multiple drifters
+elapsedMillis sinceUTC;
 
 const int VOLTpin = 16; // Voltage
 const int LED_pin = 22;  // Indicator LED
@@ -47,13 +56,9 @@ const int BUZZ_pin = 1; // Buzzer
 // FLAG [Drifter V2: const int BUZZ_pin = 15;]
 
 
-// SD variables
-File myfile;
-const int SDpinCS = 5; // Pin 10 default on Teensy
-char buf[100] = {'\0'}; //DEBUG - sprinf needs a buffer char to store data!  figure out how big you want this to be
-
 /* IMU Variables */
 #ifdef PIMARONI
+  IntervalTimer IMUtimer;
   #include <ICM20948_WE.h>
   #define ICM20948_ADDR 0x68
   ICM20948_WE myIMU = ICM20948_WE(ICM20948_ADDR);
@@ -87,7 +92,8 @@ char buf[100] = {'\0'}; //DEBUG - sprinf needs a buffer char to store data!  fig
 #ifdef SparkfunRFM
   #include <RFM69.h>
   #include <RFM69_ATC.h>
-  char sendbuffer[60]; // 62 bytes is max transmission size
+  char sendbuffer[60]; // Buffer for RFM
+  const size_t sendbuffer_size = sizeof(sendbuffer); // max transmission size per packet
   int sendlength = 0; // = sizeof(sendbuffer)
 
   #define NETWORKID     10   // Must be the same for all nodes (0 to 255)
@@ -112,6 +118,26 @@ char buf[100] = {'\0'}; //DEBUG - sprinf needs a buffer char to store data!  fig
   #endif
 #endif
 
+/* SD variables */
+File myfile;
+const int SDpinCS = 5; // Pin 10 default on Teensy
+char buf[100] = {'\0'}; //DEBUG - sprinf needs a buffer char to store data!  figure out how big you want this to be
+// IMU buffer
+const int IMUbufferSize = 50; // Adjust based on how many readings you want to buffer
+// float IMUbuffer[IMUbufferSize][9]; // 9 float values per entry
+// unsigned long IMUtimebuffer[IMUbufferSize];  // buffer for timestamps
+char imuBuffer[IMUbufferSize][100]; // Assuming 92 chars per line
+int bufferIndex = 0;
+
+/* Debugging variables */
+int time_in=0;
+int time_out=0;
+
+/* Comman Variables */
+#define MAX_COMMAND_LENGTH 20
+char commandBuffer[MAX_COMMAND_LENGTH];
+int commandIndex=0;
+
 /*------------------ ------------------ ------------------ ------------------ ------------------
  *                                IMU CODE Pimoroni
  * ----------------- ------------------ ------------------ ------------------ ------------------*/
@@ -119,11 +145,11 @@ char buf[100] = {'\0'}; //DEBUG - sprinf needs a buffer char to store data!  fig
  /*IMU initializtion functions*/
 //this function checks that the IMU is working
 void initIMU(){
-  Wire.beginTransmission(ICM20948_ADDR);
-  int error = Wire.endTransmission();
-  if(error == 0){
-    Serial.println("ICM detected on bus");
-  }
+  // Wire.beginTransmission(ICM20948_ADDR);
+  // int error = Wire.endTransmission();
+  // if(error == 0){
+  //   Serial.println("ICM detected on bus");
+  // }
   
   int linecount=0;
   Serial.println("waiting for ICM");
@@ -134,20 +160,10 @@ void initIMU(){
     if(linecount==250){
       Serial.println("waiting for ICM");
       linecount=0;
-      Wire.beginTransmission(ICM20948_ADDR);
-      int error = Wire.endTransmission();
-      if(error == 0){
-        Serial.println("ICM detected on bus");
-      }
     }
   }
-  // if(!myIMU.init()){
-  //   Serial.println("ERROR: ICM failed");
-  //   while(1);
-  // }
-  // else{
-  //   Serial.println("ICM initialized");
-  // }
+  Serial.println("IMU initialized");
+
   //test Magnometer exists and works
   if(!myIMU.initMagnetometer()){
     Serial.println("ERROR: Magnetometer failed");
@@ -156,6 +172,8 @@ void initIMU(){
   else{
     Serial.println("Magnetometer initialized");
   }
+
+  memset(imuBuffer, '\0', sizeof(imuBuffer)); // Set the imubuffer to null
 }
 
 void accelRangeSet(int range){
@@ -224,35 +242,106 @@ void calibrateIMU(){
   myIMU.setMagOpMode(AK09916_CONT_MODE_20HZ);
 }
 
-/*this function retrieves data collected by the IMU every few 
-  milliseconds and prints them to the SD card*/
-void gatherIMUdata(unsigned long currentTime){
-  int timer = millis(); //DEBUG
-  int timediff = 0; //DEBUG
+// /*this function retrieves data collected by the IMU every few 
+//   milliseconds and prints them to the SD card.  It is inconsistent and inefficient*/
+// void gatherIMUdata(unsigned long currentTime){
+//   int timer = millis(); //DEBUG
+//   int timediff = 0; //DEBUG
 
-  myfile=SD.open(IMUfilename,FILE_WRITE);
+//   myfile=SD.open(IMUfilename,FILE_WRITE);
+//   myIMU.readSensor();
+//   xyzFloat gValue = myIMU.getAccRawValues();
+//   xyzFloat gyr = myIMU.getGyrValues();
+//   xyzFloat magValue = myIMU.getMagValues();
+//   float magX = xMagGain*(magValue.x-xMagOffset);
+//   float magY = yMagGain*(magValue.y-yMagOffset);
+//   float magZ = zMagGain*(magValue.z-zMagOffset);
+//   //display current time and IMU results on the IMU file
+//   memset(buf, '\0', sizeof(buf));; //clear the buffer
+//   sprintf(buf,"%lu, %.1f, %.1f, %.1f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f",currentTime,gValue.x,gValue.y,gValue.z,gyr.x,gyr.y,gyr.z,magX,magY,magZ);
+//   myfile.println(buf);
+//   // IMU_Write_Counter++;
+//   // if (IMU_Write_Counter > 200) {
+//   //    myfile.flush();
+//   //    IMU_Write_Counter = 0;
+//   // }
+//   timediff = millis() - timer;  //DEBUG
+//   myfile.print("logtimer: "); //DEBUG
+//   myfile.println(timediff); //DEBUG
+//   myfile.flush();
+//   myfile.close();
+// }
+
+void bufferIMUData(unsigned long currentTime) {
   myIMU.readSensor();
   xyzFloat gValue = myIMU.getAccRawValues();
   xyzFloat gyr = myIMU.getGyrValues();
   xyzFloat magValue = myIMU.getMagValues();
-  float magX = xMagGain*(magValue.x-xMagOffset);
-  float magY = yMagGain*(magValue.y-yMagOffset);
-  float magZ = zMagGain*(magValue.z-zMagOffset);
-  //display current time and IMU results on the IMU file
-  memset(buf, '\0', sizeof(buf));; //clear the buffer
-  sprintf(buf,"%lu, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f,",currentTime,gValue.x,gValue.y,gValue.z,gyr.x,gyr.y,gyr.z,magX,magY,magZ);
-  myfile.println(buf);
-  // IMU_Write_Counter++;
-  // if (IMU_Write_Counter > 200) {
-  //    myfile.flush();
-  //    IMU_Write_Counter = 0;
-  // }
-  timediff = millis() - timer;  //DEBUG
-  myfile.print("logtimer: "); //DEBUG
-  myfile.println(timediff); //DEBUG
-  myfile.flush();
-  myfile.close();
+  float magX = xMagGain * (magValue.x - xMagOffset);
+  float magY = yMagGain * (magValue.y - yMagOffset);
+  float magZ = zMagGain * (magValue.z - zMagOffset);
+
+  // Store in buffer
+  snprintf(imuBuffer[bufferIndex], 100, "%lu, %.1f, %.1f, %.1f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f",
+          currentTime, gValue.x, gValue.y, gValue.z, gyr.x, gyr.y, gyr.z, magX, magY, magZ);
+  imuBuffer[bufferIndex][97] = '\0';  // New line //FLAG is this new line termination correct? will it ever write over data?
+  imuBuffer[bufferIndex][98] = '\r';  // New line
+  imuBuffer[bufferIndex][99] = '\n';  // Null terminate
+  bufferIndex++;
+
+  if (bufferIndex >= IMUbufferSize) {
+    if(debug){
+      time_in=millis();
+    }
+    writeIMUDataToSD();
+     if(debug){
+      time_out=millis()-time_in;
+    }
+  }
 }
+
+void writeIMUDataToSD() {
+    myfile = SD.open(IMUfilename, FILE_WRITE);
+  
+    myfile.write((uint8_t*)imuBuffer, bufferIndex * sizeof(imuBuffer[0]));
+    if (debug) {
+        char timeStr[20];  // Buffer to hold the formatted time string
+        sprintf(timeStr, "$%d\r\n", time_out);  // Format the time with a $ prefix and newline
+        myfile.write(timeStr, strlen(timeStr));  // Write the time string to the SD card
+        memset(timeStr, ' ',sizeof(timeStr)); //reset timeStr
+    }
+
+    myfile.flush();
+    myfile.close();
+    memset(imuBuffer, '\0', sizeof(imuBuffer)); //Wipe the buffer with ' ' char
+    bufferIndex = 0;
+}
+
+// void writeIMUDataToSD() {
+//     myfile = SD.open(IMUfilename, FILE_WRITE);
+//     // Calculate total length of valid data in the buffer
+//     int totalLength = 0;
+//     for (int i = 0; i < bufferIndex; i++) {
+//         totalLength += strlen(imuBuffer[i]);
+//     }
+//     // Write the entire valid data in one go
+//     myfile.write((uint8_t*)imuBuffer, totalLength);
+
+//     myfile.flush();
+//     myfile.close();
+    
+//     // Reset the buffer with spaces or null characters if needed
+//     memset(imuBuffer, ' ', sizeof(imuBuffer)); // Initialize with spaces to avoid unwanted characters
+//     bufferIndex = 0; // Reset buffer index
+// }
+
+
+void flushRemainingIMUData() {
+    if (bufferIndex > 0) {
+        writeIMUDataToSD();
+    }
+}
+
 #endif
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
@@ -306,13 +395,7 @@ void initGPS(){
       linecount=0;
     }
   }
-  if(!myGNSS.begin()){
-    Serial.println("ERROR: GPS failed");
-    while(1);
-  } 
-  else{
-    Serial.println("GPS initialized");
-  }
+  Serial.println("GPS initialized");
 
   // Configure the GPS settings
   SendGPSconfiguration(); // Use Binary to send a bunch of configurations to the M8P
@@ -331,14 +414,9 @@ void initGPS(){
 }
 
 void printRAWX(UBX_RXM_RAWX_data_t rawxData){
-  Serial.print(F("\r\nRAWX: Length: "));
-  Serial.print(rawxData.header.numMeas); 
-
-  if (rawxData.header.numMeas > 0) {
-    double prMesValue;
-    memcpy(&prMesValue, rawxData.blocks[0].prMes, sizeof(prMesValue));
-    Serial.print(F("\r\nBlock 0 prMes: "));
-    Serial.println(prMesValue, 6); // Print with 6 decimal places
+  if(debug){ // print RAWX recieved
+    Serial.print(F("\r\nRAWX: Length: "));
+    Serial.print(rawxData.header.numMeas); 
   }
 
   // Write data to SD card
@@ -346,65 +424,65 @@ void printRAWX(UBX_RXM_RAWX_data_t rawxData){
     int timer = millis();
     int timediff = 0;
     myfile = SD.open(GPSfilename, FILE_WRITE);  
-    // Convert rcvTow to double
-    double rcvTowValue;
-    memcpy(&rcvTowValue, rawxData.header.rcvTow, sizeof(rcvTowValue));
-    
-    // Write header information
-    myfile.print(rcvTowValue, 6);
-    myfile.print(',');
-    myfile.print(rawxData.header.week);
-    myfile.print(',');
-    myfile.print(rawxData.header.leapS);
-    myfile.print(',');
-    myfile.println(rawxData.header.numMeas);
+    static char buffer[128];  // Allocate buffer.  See u-blox_structs.h for byte size info
+    const size_t buffer_size = sizeof(buffer);
+    // const uint16_t UBX_RXM_RAWX_MAX_LEN = 16 + (32 * 92); 92+16=118
 
-    // Write block information
-    for (int i = 0; i < rawxData.header.numMeas; i++) {
-      if(debug){ //DEBUG -play buzzer when collecting raw data
-        tone(BUZZ_pin, 800);
-        delay(10);
-        noTone(BUZZ_pin);
+    // Format the header data into the buffer
+    double rcvTowValue;  // Convert rcvTow to double
+    memcpy(&rcvTowValue, rawxData.header.rcvTow, sizeof(rcvTowValue));
+    int len = snprintf(buffer, buffer_size, "%.6f,%d,%d,%d\n", 
+                      rcvTowValue, 
+                      rawxData.header.week, 
+                      rawxData.header.leapS, 
+                      rawxData.header.numMeas);
+    // Write the header to the file
+    if (len > 0 && len < buffer_size) {
+        myfile.write(buffer, len);  // Only write the actual content, not the full buffer size
+    } else { // Buffer size is too small or another error occured
+      if(debug){
+        Serial.print('ERROR: [GPS] cannot compose rawx file write. len = ');
+        Serial.println(len);
       }
-      double prMesValue, cpMesValue, doMesValue;
+    }
+
+    // Write block information from each Satallite
+    for (int i = 0; i < rawxData.header.numMeas; i++) {
+      double prMesValue, cpMesValue, doMesValue; // decode RAWX bytes into double variable
       memcpy(&prMesValue, rawxData.blocks[i].prMes, sizeof(prMesValue));
       memcpy(&cpMesValue, rawxData.blocks[i].cpMes, sizeof(cpMesValue));
       memcpy(&doMesValue, rawxData.blocks[i].doMes, sizeof(doMesValue));
-      
-      myfile.print(i);  // print datablock#
-      myfile.print(',');
-      myfile.print(prMesValue);
-      myfile.print(',');
-      myfile.print(cpMesValue);
-      myfile.print(',');
-      myfile.print(doMesValue);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].gnssId);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].svId);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].sigId);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].freqId);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].lockTime);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].cno);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].prStdev);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].cpStdev);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].doStdev);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].trkStat.bits.prValid);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].trkStat.bits.cpValid);
-      myfile.print(',');
-      myfile.print(rawxData.blocks[i].trkStat.bits.halfCyc);
-      myfile.print(',');
-      myfile.println(rawxData.blocks[i].trkStat.bits.subHalfCyc);
-      //SPEED - use an snprintf block with pre-allocated buffer to make one SD write
+      // Format the data into the buffer
+      int len = snprintf(buffer, buffer_size,
+                        "%d,%f,%f,%f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+                        i,
+                        prMesValue,
+                        cpMesValue,
+                        doMesValue,
+                        rawxData.blocks[i].gnssId,
+                        rawxData.blocks[i].svId,
+                        rawxData.blocks[i].sigId,
+                        rawxData.blocks[i].freqId,
+                        rawxData.blocks[i].lockTime,
+                        rawxData.blocks[i].cno,
+                        rawxData.blocks[i].prStdev,
+                        rawxData.blocks[i].cpStdev,
+                        rawxData.blocks[i].doStdev,
+                        rawxData.blocks[i].trkStat.bits.prValid,
+                        rawxData.blocks[i].trkStat.bits.cpValid,
+                        rawxData.blocks[i].trkStat.bits.halfCyc,
+                        rawxData.blocks[i].trkStat.bits.subHalfCyc
+      );
+      // Write the buffer to the file
+      if (len > 0 && len < buffer_size) {
+        myfile.write(buffer, len);
+      }
+      else{ // Buffer size is too small or another error occured
+        if(debug){
+          Serial.print('ERROR: [GPS] cannot compose rawx file write. len = ');
+          Serial.println(len);
+        }
+      }
     }
     timediff = millis() - timer;  //DEBUG
     myfile.print("logtimer: "); //DEBUG
@@ -442,17 +520,32 @@ void printGNGGA(NMEA_GGA_data_t *nmeaData){
   for (int i = 0; nmeaData->nmea[i] != '\n'; i++) {
     process=nmea.process((char)nmeaData->nmea[i]);
   }
-  if(process){
+  if (process) {
     Serial.print("Valid fix: ");
     Serial.println(nmea.isValid() ? "yes" : "no");
+    if(nmea.isValid()){
+      lastlatitude = nmea.getLatitude();
+      lastlongitude = nmea.getLongitude();
+      lastUTC[0] = nmea.getHour(); //GGA hhmmss.sss
+      lastUTC[1] = nmea.getMinute();
+      lastUTC[2] = nmea.getSecond();
+      lastUTC[3] = nmea.getHundredths();
 
-    float latitude_mdeg = nmea.getLatitude();
-    float longitude_mdeg = nmea.getLongitude();
-    Serial.print("Latitude (deg): ");
-    Serial.println(latitude_mdeg / 1000000., 6);
+      sinceUTC = 0; // update last time since valid fix.
 
-    Serial.print("Longitude (deg): ");
-    Serial.println(longitude_mdeg / 1000000., 6);
+      if(debug){
+        Serial.print("Latitude (deg): ");
+        Serial.println(lastlatitude);
+        Serial.print("Longitude (deg): ");
+        Serial.println(lastlongitude);
+        Serial.print("UTC Time: ");
+        Serial.print(lastUTC[0]);
+        Serial.print(lastUTC[1]);
+        Serial.print(lastUTC[2]);
+        Serial.println(lastUTC[3]);
+        
+      }
+    }
   }
 }
 
@@ -502,8 +595,8 @@ void GPSbinaryWrite(uint8_t* datatosend, size_t datalen){
   }
   byte error = Wire.endTransmission(); // End transmission
 
-  if(debug){Serial.print("[GPS] size of UBX packet: ");}
-  if(debug){Serial.println(datalen);}
+  // if(debug){Serial.print("[GPS] size of UBX packet: ");} //DEBUG
+  // if(debug){Serial.println(datalen);} //DEBUG
 
   if (error == 0) {
     Serial.println("GPS config packet sent successfully");
@@ -529,12 +622,6 @@ void initRFM(){
       linecount=0;
     }
   }
-  if(!radio.initialize(FREQUENCY,MYNODEID,NETWORKID)){
-    Serial.println("ERROR: [RFM] RFM initialize failed");
-    while(1);
-  } else{
-    Serial.println("RFM initialized");
-  }
   radio.setHighPower(); //always set high power for HCW varient
   radio.encrypt(ENCRYPTKEY);
 
@@ -543,9 +630,9 @@ void initRFM(){
   #endif 
   
   //FLAG this is a simple test startup.  Include more startup info like bat voltage, device mode, etc
-  sprintf(sendbuffer,"$SIO Drifter%01d reboot", drifterNumber); // sendlength 22 long
+  sprintf(sendbuffer,"D%01d:SU,,,,,%.2fV", drifterNumber, VOLTAGE); // sendlength 22 long
   if (USEACK){
-    if (radio.sendWithRetry(BASEID, sendbuffer, sizeof(sendbuffer), 10))
+    if (radio.sendWithRetry(BASEID, sendbuffer, strlen(sendbuffer), 10))
       Serial.println("Coms established with base");
     else
       Serial.println("ERROR: unable to establish coms to Base");
@@ -682,6 +769,20 @@ float readBatteryVoltage(int numReadings) {
  *                                            SETUP
  * ----------------- ------------------ ------------------ ------------------ ------------------*/
 void setup() {
+  // Set all ellapsedMillis to allocate
+  sinceIMU=0; 
+  sinceGPS=0; 
+  sinceUTC = 0;
+
+  if(!silent_start){
+    tone(BUZZ_pin, 800);
+    delay(200);
+    noTone(BUZZ_pin);
+  }
+  analogWrite(recoveryLED_pin, 10); //FLAG Do not set higher than 10 unless in low power mode
+  delay(10);
+  analogWrite(recoveryLED_pin, 0);
+
   if(false){ //DEBUG - change argument to debug for deployment release.  Otherwise loops waiting for serial
     Serial.begin(115200);
     while(!Serial){
@@ -726,6 +827,12 @@ void setup() {
     initfiles(); // Create drifter new file on startup with config info and data headers
   #endif
 
+  //FLAG testing faster clock
+  // SPI.begin;
+  // SD.setClockDivider(SPI_CLOCK_DIV2); // Sets SPI clock (Teensy 4.0 default speed is 96 MHz / 4)
+
+  strcpy(DRIFTER_STATUS, "OFF");
+
   // Startup sound (data is now logging)
   digitalWrite(LED_pin, HIGH);
   analogWrite(recoveryLED_pin, 10);
@@ -735,19 +842,23 @@ void setup() {
     noTone(BUZZ_pin);
     delay(25);
     tone(BUZZ_pin, 1200);
+    analogWrite(recoveryLED_pin, 0);
     delay(75);
     noTone(BUZZ_pin);
     delay(25);
     tone(BUZZ_pin, 1800);
+    analogWrite(recoveryLED_pin, 10);
     delay(75);
     noTone(BUZZ_pin);
     delay(25);
     tone(BUZZ_pin, 2700);
+    analogWrite(recoveryLED_pin, 0);
     delay(75);
     noTone(BUZZ_pin);
     delay(250);
     noTone(BUZZ_pin);
     delay(75);
+    analogWrite(recoveryLED_pin, 10);
     tone(BUZZ_pin, 6400);
     delay(350);
     noTone(BUZZ_pin);
@@ -755,7 +866,14 @@ void setup() {
   digitalWrite(LED_pin, LOW);
   analogWrite(recoveryLED_pin, 0);
 
+  // if(debug){
+  //   sinceGPS=-125; //reset GPS timer
+
+  // }
+
   if(debug){delay(5000);}
+  sinceIMU=0; //reset IMU timer
+  sinceGPS=0; //reset GPS timer //FLAG set GPS timer to 50% GPS_UPDATE to offset SD write cycle?
 }
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
@@ -774,39 +892,96 @@ void loop() {
   }
 
   #ifdef SparkfunGPS
-    if ((currentTime - lastTime_GPS)>=GPS_UPDATE) {
+    if ((sinceGPS)>=GPS_UPDATE) {
       myGNSS.checkUblox(); // Check for the arrival of new data and process it.
       myGNSS.checkCallbacks(); // Check if any callbacks are waiting to be processed.
-      lastTime_GPS = currentTime;
+      // lastTime_GPS = currentTime;
+      sinceGPS= sinceGPS - GPS_UPDATE;
     }
   #endif
 
-    // Log IMU data
-    #ifdef PIMARONI
-      if ((currentTime - lastTime_IMU)>=IMU_UPDATE) {
-        gatherIMUdata(currentTime);
-        lastTime_IMU = currentTime;
-        // Serial.print("IN IMU UPDATE time: ");   Serial.println(currentTime);
-      }
-    #endif
+  #ifdef PIMARONI
+    if ((sinceIMU)>=IMU_UPDATE) {
+      // gatherIMUdata(currentTime);
+      bufferIMUData(currentTime);
+      sinceIMU = sinceIMU - IMU_UPDATE;
+      // Serial.print("IN IMU UPDATE time: ");   Serial.println(currentTime);
+    }
+  #endif
 
     // Send an RFM message to Base
   #ifdef SparkfunRFM
     if((currentTime - lastTime_RFM)>=RFM_UPDATE){
       //FLAG: configure 'sendbuffer' and 'sendlength'
-      sprintf(sendbuffer,"Drifter clock: %lu",currentTime);
+      int len = snprintf(sendbuffer,sendbuffer_size,"%s,%ld,%ld,%lu,%.2fV", DRIFTER_STATUS, lastlatitude, lastlongitude, (unsigned long)sinceUTC , VOLTAGE); // ~ 32 bytes 
+      //FLAG: fix lastlon and lastlat data type representation in snprintf
       if (USEACK){
-        if (radio.sendWithRetry(BASEID, sendbuffer, sizeof(sendbuffer), 10)){
-          if(debug){Serial.println("Success!  ACK received");}
-        }
-        else{
-          if(debug){Serial.println("ERROR: [RFM] no ACK received");}
-        }
+        if (radio.sendWithRetry(BASEID, sendbuffer, strlen(sendbuffer), 10))
+          Serial.println("SUCCESS: message sent to base");
+        else
+          Serial.println("ERROR: unable to reach Base");
       }
       else{
-        radio.send(BASEID, sendbuffer, sizeof(sendbuffer));
+        // If you don't need acknowledgements, just use send():
+        radio.send(BASEID, sendbuffer, strlen(sendbuffer));
       }
       lastTime_RFM = currentTime;
     }
   #endif
+
+// FLAG work in progress -send drifter commands through serial terminal
+  if (Serial.available() > 0) {
+    char input = Serial.read();
+    // Check if the input is a carriage return (end of the command)
+    if (input == '\r') {
+      commandBuffer[commandIndex] = '\0';  // Null-terminate the command string
+      // Compare the command with known commands
+      if (strcmp(commandBuffer, "shutdown") == 0) {
+        if (debug) { Serial.println("Shutting down..."); }
+        #ifdef PoluluSD
+          flushRemainingIMUData();
+        #endif
+        //FLAG: IMU sleep mode not configured properly
+        // #ifdef PIMARONI  // Put the IMU into low-power mode
+        //   myIMU.setSleepMode(true);
+        //   myIMU.setCycleMode(false); // Disables the IMU cycle mode if previously enabled
+        //   if (debug) {Serial.println("IMU is in low power mode.");}
+        // #endif
+        #ifdef SparkfunGPS
+          uint8_t UBXdataToSend[] = {
+            0xB5, 0x62, 0x06, 0x04, 0x04, 0x00, 0x00, 0x00, 0x08, 0x00, 0x16, 0x74 //Stop GNSS with Hotstart option
+          };
+          GPSbinaryWrite(UBXdataToSend, sizeof(UBXdataToSend));
+          if (debug) {Serial.println("GPS is in low power mode");}
+        #endif
+        #ifdef SparkfunRFM
+          radio.sleep();
+          // Optionally, add a debug message to confirm shutdown
+          if (debug) {Serial.println("RFM69 is in low power mode");}
+        #endif
+
+        //FLAG do other shutdown steps (low power GPS)
+        if (debug) { Serial.println("FINISHED SHUTDOWN"); }
+          strcpy(DRIFTER_STATUS, "OFF");
+          while(1); // is this the best way to handle shutdown?  what about setting update rates to maxval?
+      }
+      else if (strcmp(commandBuffer, "recovery") == 0) {
+        // Handle recovery command
+      }
+      else if (strcmp(commandBuffer, "normal") == 0) {
+        // Handle normal mode command
+        // set IMU_UPDATE back to normal 
+      }
+      else {
+        Serial.println("Unknown command: ignore input");
+      }
+        // Reset the command buffer and index
+        commandIndex = 0;
+        memset(commandBuffer, '\0', sizeof(commandBuffer));
+    } 
+    // Otherwise, store the character in the command buffer
+    else if (commandIndex < MAX_COMMAND_LENGTH - 1) {
+      commandBuffer[commandIndex++] = input;
+    }
+  }
 }

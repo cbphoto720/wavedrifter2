@@ -1,12 +1,20 @@
 # WIP
+- [ ] LoRA underwater trails!! See [links on this page](https://www.thethingsnetwork.org/forum/t/lora-under-water/41144/26?page=2)
 - [x] solder recovery LED to test on breadboard
 - [x] more clearance for coin cell bat on sparkfun M8P board
 - [x] FIGURE OUT GPS/ICM CONNECTION ISSUES
 - [ ] write a new file if GPS / IMU log get too big?
-- [ ] Test the drifter2 Voltage sketch to see if it correctly reads the input voltage
+- [x] Test the drifter2 Voltage sketch to see if it correctly reads the input voltage
+- [ ] check which the best clock speed for teensy to run
+- [ ] work on GPS buffer and timing
+- [ ] work on more commands to send (beep 1s, recovery mode, flash LED 50% 1s)
 
 
-- [ ] Come up with solution for QWIIC connector issues
+- [x] Come up with solution for QWIIC connector issues
+	- plug it in harder :)
+- [ ] Come up with timing scheme for not overlapping GPS, IMU, and SD writes.  RFM broadcast needs to be its own thing.
+- [ ] fix buf[99] vs buf[100] error that causes extra spaces
+- [ ] SD card writing scheme that SAVES ON POWER DOWN
 - [ ] write RAWX data to SD card (whole thing??? can the M8P make some UBX files?)
 	- [ ] [write data to SD card efficiently](http://elm-chan.org/docs/mmc/mmc_e.html) and [also this one](https://stackoverflow.com/questions/25837386/read-write-binary-data-on-sd-using-arduino)
 - [ ] BE CAREFUL USING RECOVERY LED AS SIGNAL LED (could draw too much current if PWM doesn't work)
@@ -21,6 +29,11 @@
 - view GPS updates
 - [ ] post photos and write assembly guide
 
+# Code
+### Speed
+**RFM**
+- test if using strlen is faster than using sizeof buffer.  (better to send the null chars or to calculate message size before sending it)
+
 # Tests
 - [ ] buoyancy test of drifter2.0
 - [ ] buoyancy test of drifter2.1
@@ -31,6 +44,7 @@
 - [ ] design new GPS antenna mount
 - [ ] stronger mounting of IMU
 - [ ] recovery LED mounting position
+- [ ] [IMU FIFO buffer information](https://web.archive.org/web/20240229060544/https://wolles-elektronikkiste.de/en/icm-20948-9-axis-sensor-part-ii)
 ____
 - [x]  cut the red wire inside one of your microUSB cables.  Use jumpers and power supply to spin up the box
 - RFM69 should be power by teensy onboard 3V supply (Likely cleaner than the FlipFlop board)
@@ -102,9 +116,7 @@ ____
 - Wave-detect transmission
 	look at IMU data to detect a wave, use wave as an opportunity to transmit/look for GPS from a taller height off the water
 # Componets
-
-# VHB tape
-0.4" x 0.025" (10.16 x 0.635 mm)
+- VHB tape: 0.4" x 0.025" (10.16 x 0.635 mm)
 ## GPS
 **glonass**
 - 1598-1604 MHz
@@ -230,9 +242,6 @@ Housing2_rev2 uses a 2-224 o-ring
 ## LED
 - [1.5 W COB LED](https://www.digikey.com/en/products/detail/creeled,-inc./JK3030AWT-P-H50EA0000-N0000001/9974567?utm_adgroup=&utm_source=google&utm_medium=cpc&utm_campaign=Pmax_Shopping_Boston%20Metro%20Category%20Awareness&utm_term=&utm_content=&utm_id=go_cmp-20837509568_adg-_ad-__dev-c_ext-_prd-9974567_sig-Cj0KCQjw0_WyBhDMARIsAL1Vz8t7g8jTEnTvU7pAn2EhZ3dJouXCVCa7Tl-RsGRhepSoWFnkOTOHie8aAs1fEALw_wcB&gad_source=1&gclid=Cj0KCQjw0_WyBhDMARIsAL1Vz8t7g8jTEnTvU7pAn2EhZ3dJouXCVCa7Tl-RsGRhepSoWFnkOTOHie8aAs1fEALw_wcB) run with arduino +extra flip flop board.
 - [0.5W LED amazon](https://www.amazon.com/dp/B01CUGACEA/?coliid=IID4XTLLN0KJC&colid=T766DFYAY5YQ&ref_=list_c_wl_lv_ov_lig_dp_it&th=1)
-- 
-# Electronics
-- [ ] use [0.4" VHB tape](https://www.amazon.com/HitLights-Heavy-Double-Sided-Mounting/dp/B00PKI7IBG/ref=sr_1_2_sspa?crid=JABCASGN92ZW&dib=eyJ2IjoiMSJ9.Ij13Xm94FJr9PZn3aLfDPpOQpL0kG5guXpqFnrtxxAo5pK2Q5xUq0yUacQFbH-zSo2QgTBg_bFVhZWLL-Znq0wfS8BC_IIrBnbxDLqBdnO8Q-igDLeg4ONUTyYlpehOxUtNNXOFM6gMl7QsNsprx0l6HpbT-qT5OGABhd3b-VqpXe6xpUZdOO1sgo6wEzFaCYfCxRTW95CfyDyXYOm13IduR5LlephxemCihyQlua-s.dAm5T6WgCvachPD-ag3WeXT6-WCDmPzvjQ7tvbSkYTM&dib_tag=se&keywords=vhb%2Btape&qid=1708546653&sprefix=vhb%2Btpa%2Caps%2C279&sr=8-2-spons&sp_csd=d2lkZ2V0TmFtZT1zcF9hdGY&th=1) to mount teensy
 
 # Programming
 
@@ -249,8 +258,8 @@ Housing2_rev2 uses a 2-224 o-ring
 
 TRANSMIT MESSAGE:
 
-| UTC TIME | LAT | LON | # Sats | age (GPS data) |     | Bat voltage | GPS Freq. | **ATC setting | checksum |
-| -------- | --- | --- | ------ | -------------- | --- | ----------- | --------- | ------------- | -------- |
+| D# (Drifter #) | STATUS ('STR' Startup, 'LOG' (recording data), 'REC' (recovery), 'OFF' (shutdown)) | LAT | LON | age (GPS data) | Bat voltage |
+| -------------- | ---------------------------------------------------------------------------------- | --- | --- | -------------- | ----------- |
 **ATC - Auto Transmission Control**
 - set RSSI floor to at least -60dBm, may want to disable to not try to broadcast too quietly
 - [Regulater PSU tutorial sparkfun](https://www.sparkfun.com/tutorials/103)
