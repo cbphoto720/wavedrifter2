@@ -82,11 +82,19 @@ float param_values[PARAM_COUNT] = {3.78, 3.7};
  * ----------------- ------------------ ------------------ ------------------ ------------------*/
 
 bool parserfmessage(const char* rfmessage, DrifterData &drifter) {
-  float lat, lon; //Temp float vars
-  int parsed = sscanf(rfmessage, "%3s,%f,%f,%lu,%.2fV", drifter.Drifter_Status, &lat, &lon, &drifter.lastUTC, &drifter.voltage);
-  // Convert latitude from float to int32_t (in millionths)
-  drifter.lat = (int32_t)(lat * 1000000);
-  drifter.lon = (int32_t)(lon * 1000000);
+  long lat, lon; // Temp long vars for lat/lon
+  float voltage;
+  int parsed = sscanf(rfmessage, "%3s,%ld,%ld,%lu,%fV", drifter.Drifter_Status, &lat, &lon, &drifter.lastUTC, &voltage);
+
+  drifter.lat = (int32_t)(lat*10); // Assign to int32_t lat and convert to 1E7
+  drifter.lon = (int32_t)(lon*10); // Assign to int32_t lon and convert to 1E7
+  drifter.voltage = (int16_t)(voltage*1000); // Assign parsed variable
+
+  if (parsed != 5) {
+    Serial.print("Parsing failed. Parsed fields: ");
+    Serial.println(parsed);
+    return false; // Parsing failed
+  }
 
   return (parsed == 5);
 }
@@ -175,7 +183,22 @@ void handleIncomingDrifterRFM(const char* rfmessage){
 
   // Parse the message
   if (parserfmessage(rfmessage, parsedData)) { // if the rfmessage is successfully parsed
+    Serial.println("Successfully parsed data!");
     parsedData.drifterID=radio.SENDERID;
+
+    //DEBUG
+    Serial.print("Drifter ID: ");
+    Serial.print(parsedData.drifterID);
+    Serial.print(", Latitude: ");
+    Serial.print(parsedData.lat);
+    Serial.print(", Longitude: ");
+    Serial.print(parsedData.lon);
+    Serial.print(", Voltage: ");
+    Serial.print(parsedData.voltage);
+    Serial.print(", Drifter Status: ");
+    Serial.println(parsedData.Drifter_Status);
+
+
     updateDrifterData(parsedData.drifterID, parsedData.lat, 
                       parsedData.lon, parsedData.voltage, 
                       parsedData.Drifter_Status);
@@ -222,7 +245,7 @@ void decode_messages() {
     }
   }
 
-  delay(1); // Quick delay to avoid overwheliming requests
+  delay(5); // Quick delay to avoid overwheliming requests
 }
 
 void handle_command_long(const mavlink_message_t& message) {
@@ -304,7 +327,7 @@ void send_all_parameters() {
 void send_battery_status(float voltage) {
     mavlink_message_t msg;
     uint16_t voltages[10] = {UINT16_MAX}; // Initialize all cells to UINT16_MAX
-    uint16_t voltage_mv = voltage * 1000; // Convert voltage to millivolts
+    uint16_t voltage_mv = voltage; // Convert voltage to millivolts
     voltages[0] = voltage_mv; // Assuming a single-cell battery, store total voltage in cell 0
 
     int16_t current_battery = -1; // Current in centiAmps, -1 if not measured
@@ -370,6 +393,14 @@ void setup()
   initRFM(); // Initialize the RFM69HCW:
 
   Serial.println("SUCCESS: Base station initialized. Connect to MissionPlanner.");
+
+  //FLAG //DEBUG //WARNING: Automatically init a drifter2
+  uint8_t id = 2; // would be radio.senderID
+  int32_t lat = 328677180; // Replace with your latitude in 1E7 degrees
+  int32_t lon = -1172516670; // Replace with your longitude in 1E7 degrees
+  int16_t voltage = 3330; // Replace with your voltage reading
+  char Program_Status[4] = "LOG";
+  updateDrifterData(id, lat, lon, voltage, Program_Status);
 }
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
@@ -385,10 +416,15 @@ void loop()
   
   // Send heartbeat via serial port
   if (current_time - lastTime_heartbeat > heartbeat_interval){ // On a 1 hz interval:
-    Serial.println("HB");
     for(uint8_t i = 0; i < MAX_NUM_DRIFTERS; i++) { // loop through each connected drifterID
       if (drifters[i].drifterID != 0) {
         drifterIDi=drifters[i].drifterID; // set system ID to current drifter
+
+        //DEBUG
+        Serial.print("HB: SysID: "); Serial.print(drifters[i].drifterID);
+        Serial.print(", Lat: "); Serial.print(drifters[i].lat);
+        Serial.print(", Lon: "); Serial.println(drifters[i].lon);
+
         send_heartbeat();
         send_battery_status(drifters[i].voltage); //FLAG: voltage is temporary
         send_gps_position(drifters[i].lat, drifters[i].lon);

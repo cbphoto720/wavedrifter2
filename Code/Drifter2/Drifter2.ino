@@ -10,7 +10,7 @@
   - Sparkfun RFM69HCW Wireless Transceiver - 915MHz (SPI)
   - Pololu MicroSD breakout board (SPI)
 */
-#define DRIFTER2_VERSION "1.11"
+#define DRIFTER2_VERSION "1.13"
 #include <SPI.h>
 #include <SD.h>
 #include <Wire.h>
@@ -44,9 +44,9 @@ unsigned long lastTime_RFM = 0;
 const unsigned int SYSTEM_UPDATE = 1000; //ms
 unsigned long lastTime_System = 0;
 
-float lastlatitude = 0;
-float lastlongitude = 0;
-uint8_t LastUTC[4]; //FLAG.  handle UTC time offset for comms with multiple drifters
+long lastlatitude = 0;
+long lastlongitude = 0;
+uint8_t lastUTC[4]; //FLAG.  handle UTC time offset for comms with multiple drifters
 elapsedMillis sinceUTC;
 
 const int VOLTpin = 16; // Voltage
@@ -524,22 +524,25 @@ void printGNGGA(NMEA_GGA_data_t *nmeaData){
     Serial.print("Valid fix: ");
     Serial.println(nmea.isValid() ? "yes" : "no");
     if(nmea.isValid()){
-      lastLatitude = nmea.getLatitude();
-      lastLongitude = nmea.getLongitude();
-      LastUTC[0] = nmea.getHour(); //GGA hhmmss.sss
-      LastUTC[1] = nmea.getMinute();
-      LastUTC[2] = nmea.getSecond();
-      LastUTC[3] = nmea.getHundredths();
+      lastlatitude = nmea.getLatitude();
+      lastlongitude = nmea.getLongitude();
+      lastUTC[0] = nmea.getHour(); //GGA hhmmss.sss
+      lastUTC[1] = nmea.getMinute();
+      lastUTC[2] = nmea.getSecond();
+      lastUTC[3] = nmea.getHundredths();
 
       sinceUTC = 0; // update last time since valid fix.
 
       if(debug){
         Serial.print("Latitude (deg): ");
-        Serial.println(lastLatitude, 6);
+        Serial.println(lastlatitude);
         Serial.print("Longitude (deg): ");
-        Serial.println(lastLongitude, 6);
+        Serial.println(lastlongitude);
         Serial.print("UTC Time: ");
-        Serial.println(lastUTC);
+        Serial.print(lastUTC[0]);
+        Serial.print(lastUTC[1]);
+        Serial.print(lastUTC[2]);
+        Serial.println(lastUTC[3]);
         
       }
     }
@@ -910,7 +913,7 @@ void loop() {
   #ifdef SparkfunRFM
     if((currentTime - lastTime_RFM)>=RFM_UPDATE){
       //FLAG: configure 'sendbuffer' and 'sendlength'
-      int len = snprintf(sendbuffer,sendbuffer_size,"%s,%f,%f,%lu,%.2fV", DRIFTER_STATUS, lastlongitude, lastlatitude, (unsigned long)sinceUTC , VOLTAGE); // ~ 32 bytes 
+      int len = snprintf(sendbuffer,sendbuffer_size,"%s,%ld,%ld,%lu,%.2fV", DRIFTER_STATUS, lastlatitude, lastlongitude, (unsigned long)sinceUTC , VOLTAGE); // ~ 32 bytes 
       //FLAG: fix lastlon and lastlat data type representation in snprintf
       if (USEACK){
         if (radio.sendWithRetry(BASEID, sendbuffer, strlen(sendbuffer), 10))
@@ -938,11 +941,12 @@ void loop() {
         #ifdef PoluluSD
           flushRemainingIMUData();
         #endif
-        #ifdef PIMARONI  // Put the IMU into low-power mode
-          imu.setSleepMode(true);
-          imu.setCycleMode(false); // Disables the IMU cycle mode if previously enabled
-          if (debug) {Serial.println("IMU is in low power mode.");}
-        #endif
+        //FLAG: IMU sleep mode not configured properly
+        // #ifdef PIMARONI  // Put the IMU into low-power mode
+        //   myIMU.setSleepMode(true);
+        //   myIMU.setCycleMode(false); // Disables the IMU cycle mode if previously enabled
+        //   if (debug) {Serial.println("IMU is in low power mode.");}
+        // #endif
         #ifdef SparkfunGPS
           uint8_t UBXdataToSend[] = {
             0xB5, 0x62, 0x06, 0x04, 0x04, 0x00, 0x00, 0x00, 0x08, 0x00, 0x16, 0x74 //Stop GNSS with Hotstart option

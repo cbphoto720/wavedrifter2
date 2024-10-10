@@ -242,7 +242,7 @@ void setup() {
   uint8_t id = 1; // would be radio.senderID
   int32_t lat = 328697060; // Replace with your latitude in 1E7 degrees
   int32_t lon = -1172555570; // Replace with your longitude in 1E7 degrees
-    float voltage = 3.7; // Replace with your voltage reading
+  float voltage = 3.7; // Replace with your voltage reading
   char Program_Status = 'G'; // good
   updateDrifterData(id, lat, lon, voltage, Program_Status);
 
