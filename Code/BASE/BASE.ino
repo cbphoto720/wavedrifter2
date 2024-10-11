@@ -438,13 +438,40 @@ void loop()
 
   // SENDING (all serial input is written to buffer.  CR or >61 char will send the data)
   if (Serial.available() > 0){
+    // char input = Serial.read();
+    // if (input != '\r'){ // not a carriage return
+    //   sendbuffer[sendlength] = input;
+    //   sendlength++;
+    // }    
+
+    // if ((input == '\r') || (sendlength == 61 || input ==';')){ // CR or buffer full
+    //   // Send the packet!
+    //   Serial.print("sending to node ");
+    //   Serial.print(TONODEID, DEC);
+    //   Serial.print(": [");
+    //   for (byte i = 0; i < sendlength; i++)
+    //     Serial.print(sendbuffer[i]);
+    //   Serial.println("]");
+      
+    //   if (USEACK){
+    //     if (radio.sendWithRetry(TONODEID, sendbuffer, sendlength, 10))
+    //       Serial.println("ACK received!");
+    //     else
+    //       Serial.println("no ACK received :(");
+    //   } else { // don't use ACK
+    //     radio.send(TONODEID, sendbuffer, sendlength);
+    //   }
+    //   sendlength = 0; // reset the packet
+    // }
+
+    //FLAG: TEMPORARY RECOVER MODE DEMO
     char input = Serial.read();
-    if (input != '\r'){ // not a carriage return
-      sendbuffer[sendlength] = input;
+    if (input == 'R'){ // not a carriage return
+      sendbuffer[sendlength] = '5';
       sendlength++;
-    }    
-    if ((input == '\r') || (sendlength == 61)){ // CR or buffer full
-      // Send the packet!
+    }  
+
+          // Send the packet!
       Serial.print("sending to node ");
       Serial.print(TONODEID, DEC);
       Serial.print(": [");
@@ -461,7 +488,6 @@ void loop()
         radio.send(TONODEID, sendbuffer, sendlength);
       }
       sendlength = 0; // reset the packet
-    }
   }
 
   if (radio.receiveDone()) { // If we receive data

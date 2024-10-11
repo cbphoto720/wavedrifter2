@@ -1,5 +1,5 @@
 /*
-  Drifter 2: A water-following, Inertial-Measuring, Sattelite-tracking, Position-Transceiving, wave drifter
+  Drifter 2: A water-following, Inertial-Measuring, Satellite-tracking, Position-Transceiving, wave drifter
   By: Carson Black
   Scripps Institute of Oceanography
   Date: April 19, 2024
@@ -764,6 +764,29 @@ float readBatteryVoltage(int numReadings) {
   return batteryVoltage;
 }
 
+void sleepdrifter(){
+  #ifdef PoluluSD
+    flushRemainingIMUData();
+  #endif
+  //FLAG: IMU sleep mode not configured properly
+  // #ifdef PIMARONI  // Put the IMU into low-power mode
+  //   myIMU.setSleepMode(true);
+  //   myIMU.setCycleMode(false); // Disables the IMU cycle mode if previously enabled
+  //   if (debug) {Serial.println("IMU is in low power mode.");}
+  // #endif
+  #ifdef SparkfunGPS
+    uint8_t UBXdataToSend[] = {
+      0xB5, 0x62, 0x06, 0x04, 0x04, 0x00, 0x00, 0x00, 0x08, 0x00, 0x16, 0x74 //Stop GNSS with Hotstart option
+    };
+    GPSbinaryWrite(UBXdataToSend, sizeof(UBXdataToSend));
+    if (debug) {Serial.println("GPS is in low power mode");}
+  #endif
+  #ifdef SparkfunRFM
+    radio.sleep();
+    // Optionally, add a debug message to confirm shutdown
+    if (debug) {Serial.println("RFM69 is in low power mode");}
+  #endif
+  }
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
  *                                            SETUP
@@ -929,7 +952,50 @@ void loop() {
     }
   #endif
 
-// FLAG work in progress -send drifter commands through serial terminal
+  //FLAG: TEMPORARY RECOVERY MODE DEMO
+  if (radio.receiveDone()) { // If we receive data
+    Serial.println("reading incoming data");
+    char rfmData[radio.DATALEN + 1];  // Create a buffer for the incoming data
+    memcpy(rfmData, radio.DATA, radio.DATALEN);  // Copy the received data into the buffer
+    rfmData[radio.DATALEN] = '\0';  // Null-terminate the string
+
+    if (radio.ACKRequested()) { // Send the ACK as soon as message is in buffer
+    radio.sendACK();
+    Serial.println("Data recieved, ACK sent:");
+    }
+
+      //Print out message for serial readability
+    Serial.print("(Drifter ");
+    Serial.print(radio.SENDERID, DEC);
+    Serial.print("): [");
+    Serial.print(rfmData);
+    Serial.print("], RSSI ");
+    Serial.println(radio.RSSI);
+
+    int sleepseconds= 0;
+    char MODE;
+    // int parsed = sscanf(rfmData, "%d:%s", sleepseconds, MODE);
+    int parsed = sscanf(rfmData, "%d", &sleepseconds);
+
+    Serial.println("Shutting down...");
+    sleepdrifter();
+    Serial.println("FINISHED SHUTDOWN");
+    delay(1000);
+    for (int i = 0; i < sleepseconds; i++) {
+      // Flash LED and sound buzzer each second
+      analogWrite(recoveryLED_pin, 225);      // Dim recovery LED
+      tone(BUZZ_pin, 1000);                  // Start buzzer with 1kHz tone
+      delay(250);                            // Wait for 250ms
+      
+      analogWrite(recoveryLED_pin, 0);       // Turn off recovery LED
+      noTone(BUZZ_pin);                      // Stop buzzer
+      delay(750);                            // Wait for 750ms (rest of 1 second)
+    }
+    analogWrite(recoveryLED_pin, 0);       // Make sure recovery LED is off
+    noTone(BUZZ_pin);                      // Make sure buzzer is off
+  }
+
+  // FLAG work in progress -send drifter commands through serial terminal
   if (Serial.available() > 0) {
     char input = Serial.read();
     // Check if the input is a carriage return (end of the command)
@@ -938,29 +1004,7 @@ void loop() {
       // Compare the command with known commands
       if (strcmp(commandBuffer, "shutdown") == 0) {
         if (debug) { Serial.println("Shutting down..."); }
-        #ifdef PoluluSD
-          flushRemainingIMUData();
-        #endif
-        //FLAG: IMU sleep mode not configured properly
-        // #ifdef PIMARONI  // Put the IMU into low-power mode
-        //   myIMU.setSleepMode(true);
-        //   myIMU.setCycleMode(false); // Disables the IMU cycle mode if previously enabled
-        //   if (debug) {Serial.println("IMU is in low power mode.");}
-        // #endif
-        #ifdef SparkfunGPS
-          uint8_t UBXdataToSend[] = {
-            0xB5, 0x62, 0x06, 0x04, 0x04, 0x00, 0x00, 0x00, 0x08, 0x00, 0x16, 0x74 //Stop GNSS with Hotstart option
-          };
-          GPSbinaryWrite(UBXdataToSend, sizeof(UBXdataToSend));
-          if (debug) {Serial.println("GPS is in low power mode");}
-        #endif
-        #ifdef SparkfunRFM
-          radio.sleep();
-          // Optionally, add a debug message to confirm shutdown
-          if (debug) {Serial.println("RFM69 is in low power mode");}
-        #endif
-
-        //FLAG do other shutdown steps (low power GPS)
+        sleepdrifter();
         if (debug) { Serial.println("FINISHED SHUTDOWN"); }
           strcpy(DRIFTER_STATUS, "OFF");
           while(1); // is this the best way to handle shutdown?  what about setting update rates to maxval?
