@@ -108,7 +108,8 @@ const int BUZZ_pin = 1; // Buzzer
   #define ENABLE_ATC  //comment out this line to disable AUTO TRANSMISSION CONTROL
   #define ATC_RSSI -80
   struct RFMbuf{
-
+    uint8_t command;    // Command type
+    uint32_t data;      // Data (e.g., sleep duration in seconds)
   };
 
   #ifdef ENABLE_ATC
@@ -137,6 +138,13 @@ int time_out=0;
 #define MAX_COMMAND_LENGTH 20
 char commandBuffer[MAX_COMMAND_LENGTH];
 int commandIndex=0;
+
+/* Define command types */
+#define CMD_MODE_STARTUP   1
+#define CMD_MODE_LOGGING   2
+#define CMD_MODE_RECOVERY  3
+#define CMD_MODE_OFF       4
+#define CMD_MODE_SLEEP     5  // New command for sleep mode
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
  *                                IMU CODE Pimoroni
@@ -642,6 +650,67 @@ void initRFM(){
     radio.send(BASEID, sendbuffer, sizeof(sendbuffer));
   }
 }
+
+void handleRFMCommand(uint8_t command, uint32_t data) {
+    switch(command) {
+        case CMD_MODE_STARTUP:
+            strcpy(DRIFTER_STATUS, "STR");
+            //FLAG Add your startup mode logic
+            break;
+            
+        case CMD_MODE_LOGGING:
+            strcpy(DRIFTER_STATUS, "LOG");
+            //FLAG Add your logging mode logic
+            break;
+            
+        case CMD_MODE_RECOVERY:
+            strcpy(DRIFTER_STATUS, "REC");
+
+            Serial.println("Shutting down...");
+            sleepdrifter();
+            Serial.println("FINISHED SHUTDOWN");
+            delay(1000);
+            
+            // Sleep for specified duration with LED/buzzer feedback
+            for (uint32_t i = 0; i < data; i++) {
+                analogWrite(recoveryLED_pin, 200);  // 80% brightness recovery LED
+                tone(BUZZ_pin, 1000);              // Start buzzer with 1kHz tone
+                delay(250);                        // Wait for 250ms
+                
+                analogWrite(recoveryLED_pin, 0);   // Turn off recovery LED
+                noTone(BUZZ_pin);                  // Stop buzzer
+                delay(750);                        // Wait for 750ms (rest of 1 second)
+            }
+            analogWrite(recoveryLED_pin, 0);       // Make sure recovery LED is off
+            noTone(BUZZ_pin);                      // Make sure buzzer is off
+            break;
+            
+        case CMD_MODE_OFF:
+            strcpy(DRIFTER_STATUS, "OFF");
+
+            Serial.println("Shutting down...");
+            sleepdrifter();
+            Serial.println("FINISHED SHUTDOWN");
+            break;
+            
+        case CMD_MODE_SLEEP:
+            strcpy(DRIFTER_STATUS, "SLP");
+            
+            Serial.println("Shutting down...");
+            sleepdrifter();
+            Serial.println("FINISHED SHUTDOWN");
+            delay(1000);
+            
+            // Sleep for specified duration
+            for (uint32_t i = 0; i < data; i++) {
+                delay(1000); // Sleep for 1 second intervals
+            }
+
+            //FLAG need to resume logging after sleep
+
+            break;
+    }
+}
 #endif
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
@@ -768,12 +837,11 @@ void sleepdrifter(){
   #ifdef PoluluSD
     flushRemainingIMUData();
   #endif
-  //FLAG: IMU sleep mode not configured properly
-  // #ifdef PIMARONI  // Put the IMU into low-power mode
-  //   myIMU.setSleepMode(true);
-  //   myIMU.setCycleMode(false); // Disables the IMU cycle mode if previously enabled
-  //   if (debug) {Serial.println("IMU is in low power mode.");}
-  // #endif
+  #ifdef PIMARONI  // Put the IMU into low-power mode
+    myIMU.sleep(true);  // Enable sleep mode
+    myIMU.enableCycle(false); // Disable cycle mode to ensure full sleep
+    if (debug) {Serial.println("IMU is in low power mode.");}
+  #endif
   #ifdef SparkfunGPS
     uint8_t UBXdataToSend[] = {
       0xB5, 0x62, 0x06, 0x04, 0x04, 0x00, 0x00, 0x00, 0x08, 0x00, 0x16, 0x74 //Stop GNSS with Hotstart option
@@ -786,6 +854,9 @@ void sleepdrifter(){
     // Optionally, add a debug message to confirm shutdown
     if (debug) {Serial.println("RFM69 is in low power mode");}
   #endif
+  
+  analogWrite(recoveryLED_pin, 0);       // Make sure recovery LED is off
+  noTone(BUZZ_pin);                      // Make sure buzzer is off
   }
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
@@ -953,46 +1024,24 @@ void loop() {
   #endif
 
   //FLAG: TEMPORARY RECOVERY MODE DEMO
-  if (radio.receiveDone()) { // If we receive data
-    Serial.println("reading incoming data");
-    char rfmData[radio.DATALEN + 1];  // Create a buffer for the incoming data
-    memcpy(rfmData, radio.DATA, radio.DATALEN);  // Copy the received data into the buffer
-    rfmData[radio.DATALEN] = '\0';  // Null-terminate the string
-
-    if (radio.ACKRequested()) { // Send the ACK as soon as message is in buffer
-    radio.sendACK();
-    Serial.println("Data recieved, ACK sent:");
-    }
-
-      //Print out message for serial readability
-    Serial.print("(Drifter ");
-    Serial.print(radio.SENDERID, DEC);
-    Serial.print("): [");
-    Serial.print(rfmData);
-    Serial.print("], RSSI ");
-    Serial.println(radio.RSSI);
-
-    int sleepseconds= 0;
-    char MODE;
-    // int parsed = sscanf(rfmData, "%d:%s", sleepseconds, MODE);
-    int parsed = sscanf(rfmData, "%d", &sleepseconds);
-
-    Serial.println("Shutting down...");
-    sleepdrifter();
-    Serial.println("FINISHED SHUTDOWN");
-    delay(1000);
-    for (int i = 0; i < sleepseconds; i++) {
-      // Flash LED and sound buzzer each second
-      analogWrite(recoveryLED_pin, 225);      // Dim recovery LED
-      tone(BUZZ_pin, 1000);                  // Start buzzer with 1kHz tone
-      delay(250);                            // Wait for 250ms
+  if (radio.receiveDone()) {
+    if (radio.DATALEN >= sizeof(RFMbuf)) {  // Make sure we received enough data
+      RFMbuf* receivedData = (RFMbuf*)radio.DATA;
       
-      analogWrite(recoveryLED_pin, 0);       // Turn off recovery LED
-      noTone(BUZZ_pin);                      // Stop buzzer
-      delay(750);                            // Wait for 750ms (rest of 1 second)
+      if (debug) {
+        Serial.print("Received command: ");
+        Serial.print(receivedData->command);
+        Serial.print(" with data: ");
+        Serial.println(receivedData->data);
+      }
+      
+      handleRFMCommand(receivedData->command, receivedData->data);
+      
+      if (radio.ACKRequested()) {
+        radio.sendACK();
+        if (debug) Serial.println("ACK sent");
+      }
     }
-    analogWrite(recoveryLED_pin, 0);       // Make sure recovery LED is off
-    noTone(BUZZ_pin);                      // Make sure buzzer is off
   }
 
   // FLAG work in progress -send drifter commands through serial terminal

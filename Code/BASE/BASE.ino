@@ -516,3 +516,51 @@ void loop()
   // }
   
 }
+
+// Define command types
+struct RFMbuf {
+    uint8_t command;    // Command type
+    uint8_t data[61];   // Additional data if needed
+};
+
+// Command definitions
+#define CMD_MODE_STARTUP   1
+#define CMD_MODE_LOGGING   2
+#define CMD_MODE_RECOVERY  3
+#define CMD_MODE_OFF       4
+
+void sendDrifterCommand(uint8_t drifterId, uint8_t command) {
+    RFMbuf payload;
+    payload.command = command;
+    
+    if (radio.sendWithRetry(drifterId, (const void*)(&payload), sizeof(uint8_t))) {
+        Serial.println("Command sent successfully");
+    } else {
+        Serial.println("Failed to send command");
+    }
+}
+
+// Example usage in your command processing:
+void processSerialCommand(char* cmd) {
+    // ... existing code ...
+    
+    // Format: "MODE,drifterID,mode"
+    // Example: "MODE,2,LOG" to set drifter 2 to logging mode
+    if (strncmp(cmd, "MODE,", 5) == 0) {
+        char* ptr = cmd + 5;
+        uint8_t drifterId = atoi(ptr);
+        
+        ptr = strchr(ptr, ',');
+        if (ptr != NULL) {
+            ptr++;
+            uint8_t cmdType;
+            if (strcmp(ptr, "STR") == 0) cmdType = CMD_MODE_STARTUP;
+            else if (strcmp(ptr, "LOG") == 0) cmdType = CMD_MODE_LOGGING;
+            else if (strcmp(ptr, "REC") == 0) cmdType = CMD_MODE_RECOVERY;
+            else if (strcmp(ptr, "OFF") == 0) cmdType = CMD_MODE_OFF;
+            else return;
+            
+            sendDrifterCommand(drifterId, cmdType);
+        }
+    }
+}
