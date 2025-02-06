@@ -52,8 +52,10 @@ elapsedMillis sinceUTC;
 const int VOLTpin = 16; // Voltage
 const int LED_pin = 22;  // Indicator LED
 const int recoveryLED_pin = 6;  // Recovery LED
+#define runtimeLEDpower 10;
 const int BUZZ_pin = 1; // Buzzer
 // FLAG [Drifter V2: const int BUZZ_pin = 15;]
+
 
 
 /* IMU Variables */
@@ -652,10 +654,27 @@ void initRFM(){
 
 void sleepdrifter() {
   //WIP
-  // Implement the logic to put the drifter to sleep
-  // This is a placeholder and should be replaced with the actual implementation
-  Serial.println("Sleeping...");
-  // Add the logic to put the drifter to sleep
+  if (debug) { Serial.println("Shutting down..."); }
+  #ifdef PoluluSD
+    flushRemainingIMUData();
+  #endif
+  #ifdef PIMARONI  // Put the IMU into low-power mode
+    myIMU.sleep(true);  // Enable sleep mode
+    myIMU.enableCycle(false); // Disable cycle mode to ensure full sleep
+    if (debug) {Serial.println("IMU is in low power mode.");}
+  #endif
+  #ifdef SparkfunGPS
+    uint8_t UBXdataToSend[] = {
+      0xB5, 0x62, 0x06, 0x04, 0x04, 0x00, 0x00, 0x00, 0x08, 0x00, 0x16, 0x74 //Stop GNSS with Hotstart option
+    };
+    GPSbinaryWrite(UBXdataToSend, sizeof(UBXdataToSend));
+    if (debug) {Serial.println("GPS is in low power mode");}
+  #endif
+  #ifdef SparkfunRFM
+    radio.sleep();
+    // Optionally, add a debug message to confirm shutdown
+    if (debug) {Serial.println("RFM69 is in low power mode");}
+  #endif
 }
 #endif
 
@@ -779,54 +798,42 @@ float readBatteryVoltage(int numReadings) {
   return batteryVoltage;
 }
 
-
-/*------------------ ------------------ ------------------ ------------------ ------------------
- *                                            SETUP
- * ----------------- ------------------ ------------------ ------------------ ------------------*/
-void setup() {
-  // Set all ellapsedMillis to allocate
-  sinceIMU=0; 
-  sinceGPS=0; 
-  sinceUTC = 0;
-
+void startupSound(){
+  // digitalWrite(LED_pin, HIGH); // For indicator LED
+  analogWrite(recoveryLED_pin, runtimeLEDpower);
   if(!silent_start){
     tone(BUZZ_pin, 800);
-    delay(200);
+    delay(75);
+    noTone(BUZZ_pin);
+    delay(25);
+    tone(BUZZ_pin, 1200);
+    analogWrite(recoveryLED_pin, 0);
+    delay(75);
+    noTone(BUZZ_pin);
+    delay(25);
+    tone(BUZZ_pin, 1800);
+    analogWrite(recoveryLED_pin, runtimeLEDpower);
+    delay(75);
+    noTone(BUZZ_pin);
+    delay(25);
+    tone(BUZZ_pin, 2700);
+    analogWrite(recoveryLED_pin, 0);
+    delay(75);
+    noTone(BUZZ_pin);
+    delay(250);
+    noTone(BUZZ_pin);
+    delay(75);
+    analogWrite(recoveryLED_pin, runtimeLEDpower);
+    tone(BUZZ_pin, 6400);
+    delay(350);
     noTone(BUZZ_pin);
   }
-  analogWrite(recoveryLED_pin, 10); //FLAG Do not set higher than 10 unless in low power mode
-  delay(10);
-  analogWrite(recoveryLED_pin, 0);
+  // digitalWrite(LED_pin, LOW); // For indicator LED
+  analogWrite(recoveryLED_pin, 0); // Set recovery LED to off **Very important**
+}
 
-  if(false){ //DEBUG - change argument to debug for deployment release.  Otherwise loops waiting for serial
-    Serial.begin(115200);
-    while(!Serial){
-      delay(20);
-    }  
-  }
-  #if defined(SparkfunGPS) || defined(PIMARONI)
-    pinMode(18, INPUT_PULLUP);
-    pinMode(19, INPUT_PULLUP);
-    Wire.begin();
-    Wire.setClock(400000);  //FLAG: I2C fast mode 400000 or normal 100000
-  #endif
-
-  Serial.println(" ");
-  Serial.println("~ ~ ~ ~ ~ REBOOT ~ ~ ~ ~ ~");
-  delay(1000);
-
-/*
-  - check bat voltage
-  - init IMU, GPS, RFM, etc
-*/
-  pinMode(BUZZ_pin, OUTPUT);
-  pinMode(LED_pin, OUTPUT);
-  pinMode(recoveryLED_pin, OUTPUT);
-  pinMode(VOLTpin, INPUT);
-  noTone(BUZZ_pin);
-  digitalWrite(LED_pin, LOW);
-  analogWrite(recoveryLED_pin, 0);
-  VOLTAGE= readBatteryVoltage(5);
+void restartDrifter(){
+  // Initialize Sensors
   #ifdef PIMARONI 
     initIMU();
     calibrateIMU();
@@ -839,56 +846,70 @@ void setup() {
   #endif
   #ifdef PoluluSD
     initmicroSD();
-    initfiles(); // Create drifter new file on startup with config info and data headers
+    initfiles();
+  #endif
+
+  // Startup sound (data is ready to log)
+  startupSound();
+
+  if(debug){delay(5000);}
+  // Set all ellapsedMillis to allocate
+  sinceIMU=0; 
+  sinceGPS=0; //reset GPS timer //FLAG set GPS timer to 50% GPS_UPDATE to offset SD write cycle?
+  sinceUTC = 0; //reset IMU timer
+  strcpy(DRIFTER_STATUS, "LOG");
+}
+
+/*------------------ ------------------ ------------------ ------------------ ------------------
+ *                                            SETUP
+ * ----------------- ------------------ ------------------ ------------------ ------------------*/
+void setup() {
+  if(!silent_start){
+    tone(BUZZ_pin, 800);
+    delay(200);
+    noTone(BUZZ_pin);
+  }
+  analogWrite(recoveryLED_pin, runtimeLEDpower); //FLAG Do not set higher than 10 unless in low power mode
+  delay(50);
+  analogWrite(recoveryLED_pin, 0);
+
+  // Set pin modes
+  pinMode(BUZZ_pin, OUTPUT);
+  pinMode(LED_pin, OUTPUT);
+  pinMode(recoveryLED_pin, OUTPUT);
+  pinMode(VOLTpin, INPUT);
+  noTone(BUZZ_pin);
+  digitalWrite(LED_pin, LOW);
+  analogWrite(recoveryLED_pin, 0);
+  VOLTAGE= readBatteryVoltage(5);
+
+  // Start serial communication
+  if(false){ //DEBUG - change argument to debug for deployment release.  Otherwise loops waiting for serial
+    Serial.begin(115200);
+    while(!Serial){
+      delay(20);
+    }  
+  }
+
+  // Initialize I2C
+  #if defined(SparkfunGPS) || defined(PIMARONI)
+    pinMode(18, INPUT_PULLUP);
+    pinMode(19, INPUT_PULLUP);
+    Wire.begin();
+    Wire.setClock(400000);  //FLAG: I2C fast mode 400000 or normal 100000
   #endif
 
   //FLAG testing faster clock
   // SPI.begin;
   // SD.setClockDivider(SPI_CLOCK_DIV2); // Sets SPI clock (Teensy 4.0 default speed is 96 MHz / 4)
-
-  strcpy(DRIFTER_STATUS, "OFF");
-
-  // Startup sound (data is now logging)
-  digitalWrite(LED_pin, HIGH);
-  analogWrite(recoveryLED_pin, 10);
-  if(!silent_start){
-    tone(BUZZ_pin, 800);
-    delay(75);
-    noTone(BUZZ_pin);
-    delay(25);
-    tone(BUZZ_pin, 1200);
-    analogWrite(recoveryLED_pin, 0);
-    delay(75);
-    noTone(BUZZ_pin);
-    delay(25);
-    tone(BUZZ_pin, 1800);
-    analogWrite(recoveryLED_pin, 10);
-    delay(75);
-    noTone(BUZZ_pin);
-    delay(25);
-    tone(BUZZ_pin, 2700);
-    analogWrite(recoveryLED_pin, 0);
-    delay(75);
-    noTone(BUZZ_pin);
-    delay(250);
-    noTone(BUZZ_pin);
-    delay(75);
-    analogWrite(recoveryLED_pin, 10);
-    tone(BUZZ_pin, 6400);
-    delay(350);
-    noTone(BUZZ_pin);
+  if(debug){
+    Serial.println(" ");
+    Serial.println("~ ~ ~ ~ ~ REBOOT ~ ~ ~ ~ ~");
+    delay(1000);
   }
-  digitalWrite(LED_pin, LOW);
-  analogWrite(recoveryLED_pin, 0);
 
-  // if(debug){
-  //   sinceGPS=-125; //reset GPS timer
-
-  // }
-
-  if(debug){delay(5000);}
-  sinceIMU=0; //reset IMU timer
-  sinceGPS=0; //reset GPS timer //FLAG set GPS timer to 50% GPS_UPDATE to offset SD write cycle?
+  //Initialize Drifter & start logging
+  restartDrifter()
 }
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
@@ -898,8 +919,8 @@ void loop() {
   // put your main code here, to run repeatedly:
   currentTime = millis();
   if((currentTime - lastTime_System)>=SYSTEM_UPDATE){
-    VOLTAGE= readBatteryVoltage(1);
     if(debug){
+      VOLTAGE= readBatteryVoltage(1);
       Serial.print("Voltage: ");
       Serial.println(VOLTAGE);
     }
@@ -927,24 +948,30 @@ void loop() {
     // Send an RFM message to Base
   #ifdef SparkfunRFM
     if((currentTime - lastTime_RFM)>=RFM_UPDATE){
-      //FLAG: configure 'sendbuffer' and 'sendlength'
-      int len = snprintf(sendbuffer,sendbuffer_size,"%s,%ld,%ld,%lu,%.2fV", DRIFTER_STATUS, lastlatitude, lastlongitude, (unsigned long)sinceUTC , VOLTAGE); // ~ 32 bytes 
-      //FLAG: fix lastlon and lastlat data type representation in snprintf
+      int len = snprintf(sendbuffer,sendbuffer_size,"%s,%ld,%ld,%lu,%.2fV", DRIFTER_STATUS, lastlatitude, lastlongitude, (unsigned long)sinceUTC , VOLTAGE);
+      
+      if (len < 0) {
+        if(debug) {Serial.println("ERROR: RFM broadcast message encoding failed");}
+        return;
+      }
+      if (len >= sendbuffer_size) {
+        if(debug) {Serial.println("WARNING: RFM broadcast message truncated");}
+      }
+
       if (USEACK){
-        if (radio.sendWithRetry(BASEID, sendbuffer, strlen(sendbuffer), 10))
-          Serial.println("SUCCESS: message sent to base");
+        if (radio.sendWithRetry(BASEID, sendbuffer, len < sendbuffer_size ? len : sendbuffer_size-1))
+          if(debug) {Serial.println("SUCCESS: message sent to base");}
         else
-          Serial.println("ERROR: unable to reach Base");
+          if(debug) {Serial.println("ERROR: unable to reach Base");}
       }
       else{
-        // If you don't need acknowledgements, just use send():
-        radio.send(BASEID, sendbuffer, strlen(sendbuffer));
+        radio.send(BASEID, sendbuffer, len < sendbuffer_size ? len : sendbuffer_size-1);
       }
       lastTime_RFM = currentTime;
     }
   #endif
 
-  // Send commands via RFM
+  // Receive commands via RFM
   #ifdef SparkfunRFM
   if (radio.receiveDone()) {
       // Send acknowledgment back to base if needed
@@ -954,10 +981,9 @@ void loop() {
 
     if (radio.DATALEN >= sizeof(RFMbuf)) {
       RFMbuf* receivedData = (RFMbuf*)radio.DATA;
-      
       switch(receivedData->command) {
         case CMD_MODE_MSG:
-          Serial.println("[RFM] MESSAGE RECEIVED");
+          if(debug) {Serial.println("[RFM] MESSAGE RECEIVED");}
           break;
 
         case CMD_MODE_LOG:
@@ -972,13 +998,17 @@ void loop() {
           break;
           
         case CMD_MODE_RECOVERY:
+          //WIP 
           strcpy(DRIFTER_STATUS, "REC");
-          analogWrite(recoveryLED_pin, 200);  // 80% brightness recovery LED
-          tone(BUZZ_pin, 1000);              // Start buzzer with 1kHz tone
-          delay(250);                        // Wait for 250ms
-          analogWrite(recoveryLED_pin, 0);   // Turn off recovery LED
-          noTone(BUZZ_pin);                  // Stop buzzer
-          delay(750);                        // Wait for 750ms (rest of 1 second)
+          // Placeholder for recovery mode.  Put these statements in a loop & modify sensor output
+
+          // analogWrite(recoveryLED_pin, 200);  // 80% brightness recovery LED
+          // tone(BUZZ_pin, 1000);              // Start buzzer with 1kHz tone
+          // delay(250);                        // Wait for 250ms
+          // analogWrite(recoveryLED_pin, 0);   // Turn off recovery LED
+
+          // noTone(BUZZ_pin);                  // Stop buzzer
+          // delay(750);                        // Wait for 750ms (rest of 1 second)
           break;
           
         case CMD_MODE_SLEEP:
@@ -994,13 +1024,12 @@ void loop() {
           }
 
           // Resume logging after sleep
-          strcpy(DRIFTER_STATUS, "LOG");
+          //WIP
           #ifdef PIMARONI
               myIMU.sleep(false);  // Wake up IMU
               if (debug) {Serial.println("IMU waking up from sleep mode.");}
           #endif
-          sinceIMU = 0;
-          sinceGPS = 0;
+          restartDrifter();
           break;
           
         case CMD_MODE_OFF:
