@@ -107,8 +107,18 @@ const int BUZZ_pin = 1; // Buzzer
   #define USEACK        true // Request ACKs or not
   #define ENABLE_ATC  //comment out this line to disable AUTO TRANSMISSION CONTROL
   #define ATC_RSSI -80
+<<<<<<< Updated upstream
   struct RFMbuf{
     uint8_t command;    // Command type
+=======
+  #define CMD_MODE_LOG    1
+  #define CMD_MODE_RECOVERY 2
+  #define CMD_MODE_SLEEP  3
+  #define CMD_MODE_OFF    4
+
+  struct RFMbuf{
+    uint8_t command;    // Command type (1-4)
+>>>>>>> Stashed changes
     uint32_t data;      // Data (e.g., sleep duration in seconds)
   };
 
@@ -651,6 +661,7 @@ void initRFM(){
   }
 }
 
+<<<<<<< Updated upstream
 void handleRFMCommand(uint8_t command, uint32_t data) {
     switch(command) {
         case CMD_MODE_STARTUP:
@@ -710,6 +721,14 @@ void handleRFMCommand(uint8_t command, uint32_t data) {
 
             break;
     }
+=======
+void sleepdrifter() {
+  //WIP
+  // Implement the logic to put the drifter to sleep
+  // This is a placeholder and should be replaced with the actual implementation
+  Serial.println("Sleeping...");
+  // Add the logic to put the drifter to sleep
+>>>>>>> Stashed changes
 }
 #endif
 
@@ -1023,6 +1042,7 @@ void loop() {
     }
   #endif
 
+<<<<<<< Updated upstream
   //FLAG: TEMPORARY RECOVERY MODE DEMO
   if (radio.receiveDone()) {
     if (radio.DATALEN >= sizeof(RFMbuf)) {  // Make sure we received enough data
@@ -1055,26 +1075,123 @@ void loop() {
         if (debug) { Serial.println("Shutting down..."); }
         sleepdrifter();
         if (debug) { Serial.println("FINISHED SHUTDOWN"); }
+=======
+  // Send commands via RFM
+  #ifdef SparkfunRFM
+  if (radio.receiveDone()) {
+    // Send acknowledgment back to base
+    if (radio.ACKRequested()) {
+      radio.sendACK();
+    }
+
+    if (radio.DATALEN >= sizeof(RFMbuf)) { // Check if the received data is the correct size
+      RFMbuf* receivedData = (RFMbuf*)radio.DATA;
+      
+      switch(receivedData->command) {
+        case CMD_MODE_LOG:
+          strcpy(DRIFTER_STATUS, "LOG");
+          #ifdef PIMARONI
+            myIMU.sleep(false);  // Wake up IMU
+            if (debug) {Serial.println("IMU waking up from sleep mode.");}
+          #endif
+          sinceIMU = 0;
+          sinceGPS = 0;
+          break;
+          
+        case CMD_MODE_RECOVERY:
+          strcpy(DRIFTER_STATUS, "REC");
+          analogWrite(recoveryLED_pin, 200);  // 80% brightness recovery LED
+          tone(BUZZ_pin, 1000);              // Start buzzer with 1kHz tone
+          delay(250);                        // Wait for 250ms
+          analogWrite(recoveryLED_pin, 0);   // Turn off recovery LED
+          noTone(BUZZ_pin);                  // Stop buzzer
+          delay(750);                        // Wait for 750ms (rest of 1 second)
+          break;
+          
+        case CMD_MODE_SLEEP:
+          strcpy(DRIFTER_STATUS, "SLP");
+          Serial.println("Shutting down...");
+          sleepdrifter();
+          Serial.println("FINISHED SHUTDOWN");
+          delay(1000);
+          
+          // Sleep for specified duration from data field
+          for (uint32_t i = 0; i < receivedData->data; i++) {
+              delay(1000); // Sleep for 1 second intervals
+          }
+
+          // Resume logging after sleep
+          strcpy(DRIFTER_STATUS, "LOG");
+          #ifdef PIMARONI
+              myIMU.sleep(false);  // Wake up IMU
+              if (debug) {Serial.println("IMU waking up from sleep mode.");}
+          #endif
+          sinceIMU = 0;
+          sinceGPS = 0;
+          break;
+          
+        case CMD_MODE_OFF:
+>>>>>>> Stashed changes
           strcpy(DRIFTER_STATUS, "OFF");
-          while(1); // is this the best way to handle shutdown?  what about setting update rates to maxval?
+          sleepdrifter();
+          break;
       }
-      else if (strcmp(commandBuffer, "recovery") == 0) {
-        // Handle recovery command
-      }
-      else if (strcmp(commandBuffer, "normal") == 0) {
-        // Handle normal mode command
-        // set IMU_UPDATE back to normal 
-      }
-      else {
-        Serial.println("Unknown command: ignore input");
-      }
-        // Reset the command buffer and index
-        commandIndex = 0;
-        memset(commandBuffer, '\0', sizeof(commandBuffer));
-    } 
-    // Otherwise, store the character in the command buffer
-    else if (commandIndex < MAX_COMMAND_LENGTH - 1) {
-      commandBuffer[commandIndex++] = input;
     }
   }
+#endif
+
+// FLAG work in progress -send drifter commands through serial terminal
+  // if (Serial.available() > 0) {
+  //   char input = Serial.read();
+  //   // Check if the input is a carriage return (end of the command)
+  //   if (input == '\r') {
+  //     commandBuffer[commandIndex] = '\0';  // Null-terminate the command string
+  //     // Compare the command with known commands
+  //     if (strcmp(commandBuffer, "shutdown") == 0) {
+  //       if (debug) { Serial.println("Shutting down..."); }
+  //       #ifdef PoluluSD
+  //         flushRemainingIMUData();
+  //       #endif
+  //       #ifdef PIMARONI  // Put the IMU into low-power mode
+  //         myIMU.sleep(true);  // Enable sleep mode
+  //         myIMU.enableCycle(false); // Disable cycle mode to ensure full sleep
+  //         if (debug) {Serial.println("IMU is in low power mode.");}
+  //       #endif
+  //       #ifdef SparkfunGPS
+  //         uint8_t UBXdataToSend[] = {
+  //           0xB5, 0x62, 0x06, 0x04, 0x04, 0x00, 0x00, 0x00, 0x08, 0x00, 0x16, 0x74 //Stop GNSS with Hotstart option
+  //         };
+  //         GPSbinaryWrite(UBXdataToSend, sizeof(UBXdataToSend));
+  //         if (debug) {Serial.println("GPS is in low power mode");}
+  //       #endif
+  //       #ifdef SparkfunRFM
+  //         radio.sleep();
+  //         // Optionally, add a debug message to confirm shutdown
+  //         if (debug) {Serial.println("RFM69 is in low power mode");}
+  //       #endif
+
+  //       //FLAG do other shutdown steps (low power GPS)
+  //       if (debug) { Serial.println("FINISHED SHUTDOWN"); }
+  //         strcpy(DRIFTER_STATUS, "OFF");
+  //         while(1); // is this the best way to handle shutdown?  what about setting update rates to maxval?
+  //     }
+  //     else if (strcmp(commandBuffer, "recovery") == 0) {
+  //       // Handle recovery command
+  //     }
+  //     else if (strcmp(commandBuffer, "normal") == 0) {
+  //       // Handle normal mode command
+  //       // set IMU_UPDATE back to normal 
+  //     }
+  //     else {
+  //       Serial.println("Unknown command: ignore input");
+  //     }
+  //       // Reset the command buffer and index
+  //       commandIndex = 0;
+  //       memset(commandBuffer, '\0', sizeof(commandBuffer));
+  //   } 
+  //   // Otherwise, store the character in the command buffer
+  //   else if (commandIndex < MAX_COMMAND_LENGTH - 1) {
+  //     commandBuffer[commandIndex++] = input;
+  //   }
+  // }
 }
