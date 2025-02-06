@@ -103,24 +103,20 @@ const int BUZZ_pin = 1; // Buzzer
   #define MY_RF69_SPI_CS 21
   #define FREQUENCY     RF69_915MHZ
   #define ENCRYPTKEY    "FILEDCREW1234567" // Use the same 16-byte key on all nodes
-  // optional configs
-  #define USEACK        true // Request ACKs or not
-  #define ENABLE_ATC  //comment out this line to disable AUTO TRANSMISSION CONTROL
-  #define ATC_RSSI -80
-<<<<<<< Updated upstream
-  struct RFMbuf{
-    uint8_t command;    // Command type
-=======
+
+  struct RFMbuf{ // Structure for incoming commands
+    uint8_t command;    // Command type (0-4)
+    uint32_t data;      // Data (e.g., sleep duration in seconds)
+  };
+  #define CMD_MODE_MSG    0
   #define CMD_MODE_LOG    1
   #define CMD_MODE_RECOVERY 2
   #define CMD_MODE_SLEEP  3
   #define CMD_MODE_OFF    4
-
-  struct RFMbuf{
-    uint8_t command;    // Command type (1-4)
->>>>>>> Stashed changes
-    uint32_t data;      // Data (e.g., sleep duration in seconds)
-  };
+  // optional configs
+  #define USEACK        true // Request ACKs or not
+  #define ENABLE_ATC  //comment out this line to disable AUTO TRANSMISSION CONTROL
+  #define ATC_RSSI -80
 
   #ifdef ENABLE_ATC
   RFM69_ATC radio(MY_RF69_SPI_CS,MY_RF69_IRQ_PIN);
@@ -148,13 +144,6 @@ int time_out=0;
 #define MAX_COMMAND_LENGTH 20
 char commandBuffer[MAX_COMMAND_LENGTH];
 int commandIndex=0;
-
-/* Define command types */
-#define CMD_MODE_STARTUP   1
-#define CMD_MODE_LOGGING   2
-#define CMD_MODE_RECOVERY  3
-#define CMD_MODE_OFF       4
-#define CMD_MODE_SLEEP     5  // New command for sleep mode
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
  *                                IMU CODE Pimoroni
@@ -661,74 +650,12 @@ void initRFM(){
   }
 }
 
-<<<<<<< Updated upstream
-void handleRFMCommand(uint8_t command, uint32_t data) {
-    switch(command) {
-        case CMD_MODE_STARTUP:
-            strcpy(DRIFTER_STATUS, "STR");
-            //FLAG Add your startup mode logic
-            break;
-            
-        case CMD_MODE_LOGGING:
-            strcpy(DRIFTER_STATUS, "LOG");
-            //FLAG Add your logging mode logic
-            break;
-            
-        case CMD_MODE_RECOVERY:
-            strcpy(DRIFTER_STATUS, "REC");
-
-            Serial.println("Shutting down...");
-            sleepdrifter();
-            Serial.println("FINISHED SHUTDOWN");
-            delay(1000);
-            
-            // Sleep for specified duration with LED/buzzer feedback
-            for (uint32_t i = 0; i < data; i++) {
-                analogWrite(recoveryLED_pin, 200);  // 80% brightness recovery LED
-                tone(BUZZ_pin, 1000);              // Start buzzer with 1kHz tone
-                delay(250);                        // Wait for 250ms
-                
-                analogWrite(recoveryLED_pin, 0);   // Turn off recovery LED
-                noTone(BUZZ_pin);                  // Stop buzzer
-                delay(750);                        // Wait for 750ms (rest of 1 second)
-            }
-            analogWrite(recoveryLED_pin, 0);       // Make sure recovery LED is off
-            noTone(BUZZ_pin);                      // Make sure buzzer is off
-            break;
-            
-        case CMD_MODE_OFF:
-            strcpy(DRIFTER_STATUS, "OFF");
-
-            Serial.println("Shutting down...");
-            sleepdrifter();
-            Serial.println("FINISHED SHUTDOWN");
-            break;
-            
-        case CMD_MODE_SLEEP:
-            strcpy(DRIFTER_STATUS, "SLP");
-            
-            Serial.println("Shutting down...");
-            sleepdrifter();
-            Serial.println("FINISHED SHUTDOWN");
-            delay(1000);
-            
-            // Sleep for specified duration
-            for (uint32_t i = 0; i < data; i++) {
-                delay(1000); // Sleep for 1 second intervals
-            }
-
-            //FLAG need to resume logging after sleep
-
-            break;
-    }
-=======
 void sleepdrifter() {
   //WIP
   // Implement the logic to put the drifter to sleep
   // This is a placeholder and should be replaced with the actual implementation
   Serial.println("Sleeping...");
   // Add the logic to put the drifter to sleep
->>>>>>> Stashed changes
 }
 #endif
 
@@ -852,31 +779,6 @@ float readBatteryVoltage(int numReadings) {
   return batteryVoltage;
 }
 
-void sleepdrifter(){
-  #ifdef PoluluSD
-    flushRemainingIMUData();
-  #endif
-  #ifdef PIMARONI  // Put the IMU into low-power mode
-    myIMU.sleep(true);  // Enable sleep mode
-    myIMU.enableCycle(false); // Disable cycle mode to ensure full sleep
-    if (debug) {Serial.println("IMU is in low power mode.");}
-  #endif
-  #ifdef SparkfunGPS
-    uint8_t UBXdataToSend[] = {
-      0xB5, 0x62, 0x06, 0x04, 0x04, 0x00, 0x00, 0x00, 0x08, 0x00, 0x16, 0x74 //Stop GNSS with Hotstart option
-    };
-    GPSbinaryWrite(UBXdataToSend, sizeof(UBXdataToSend));
-    if (debug) {Serial.println("GPS is in low power mode");}
-  #endif
-  #ifdef SparkfunRFM
-    radio.sleep();
-    // Optionally, add a debug message to confirm shutdown
-    if (debug) {Serial.println("RFM69 is in low power mode");}
-  #endif
-  
-  analogWrite(recoveryLED_pin, 0);       // Make sure recovery LED is off
-  noTone(BUZZ_pin);                      // Make sure buzzer is off
-  }
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
  *                                            SETUP
@@ -1042,54 +944,25 @@ void loop() {
     }
   #endif
 
-<<<<<<< Updated upstream
-  //FLAG: TEMPORARY RECOVERY MODE DEMO
-  if (radio.receiveDone()) {
-    if (radio.DATALEN >= sizeof(RFMbuf)) {  // Make sure we received enough data
-      RFMbuf* receivedData = (RFMbuf*)radio.DATA;
-      
-      if (debug) {
-        Serial.print("Received command: ");
-        Serial.print(receivedData->command);
-        Serial.print(" with data: ");
-        Serial.println(receivedData->data);
-      }
-      
-      handleRFMCommand(receivedData->command, receivedData->data);
-      
-      if (radio.ACKRequested()) {
-        radio.sendACK();
-        if (debug) Serial.println("ACK sent");
-      }
-    }
-  }
-
-  // FLAG work in progress -send drifter commands through serial terminal
-  if (Serial.available() > 0) {
-    char input = Serial.read();
-    // Check if the input is a carriage return (end of the command)
-    if (input == '\r') {
-      commandBuffer[commandIndex] = '\0';  // Null-terminate the command string
-      // Compare the command with known commands
-      if (strcmp(commandBuffer, "shutdown") == 0) {
-        if (debug) { Serial.println("Shutting down..."); }
-        sleepdrifter();
-        if (debug) { Serial.println("FINISHED SHUTDOWN"); }
-=======
   // Send commands via RFM
   #ifdef SparkfunRFM
   if (radio.receiveDone()) {
-    // Send acknowledgment back to base
-    if (radio.ACKRequested()) {
-      radio.sendACK();
-    }
+      // Send acknowledgment back to base if needed
+      if (radio.ACKRequested()) {
+        radio.sendACK();
+      }
 
-    if (radio.DATALEN >= sizeof(RFMbuf)) { // Check if the received data is the correct size
+    if (radio.DATALEN >= sizeof(RFMbuf)) {
       RFMbuf* receivedData = (RFMbuf*)radio.DATA;
       
       switch(receivedData->command) {
+        case CMD_MODE_MSG:
+          Serial.println("[RFM] MESSAGE RECEIVED");
+          break;
+
         case CMD_MODE_LOG:
           strcpy(DRIFTER_STATUS, "LOG");
+
           #ifdef PIMARONI
             myIMU.sleep(false);  // Wake up IMU
             if (debug) {Serial.println("IMU waking up from sleep mode.");}
@@ -1131,7 +1004,6 @@ void loop() {
           break;
           
         case CMD_MODE_OFF:
->>>>>>> Stashed changes
           strcpy(DRIFTER_STATUS, "OFF");
           sleepdrifter();
           break;
