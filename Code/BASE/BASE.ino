@@ -70,6 +70,16 @@ RFM69_ATC radio(MY_RF69_SPI_CS,MY_RF69_IRQ_PIN);
 RFM69 radio(MY_RF69_SPI_CS,MY_RF69_IRQ_PIN);
 #endif
 
+// Define command types
+#define CMD_MODE_LOG    1
+#define CMD_MODE_RECOVERY 2
+#define CMD_MODE_SLEEP  3
+#define CMD_MODE_OFF    4
+
+struct RFMbuf { // Structure for sending commands
+    uint8_t command;    // Command type (1-4)
+    uint32_t data;      // Data (e.g., sleep duration in seconds)
+};
 
 /* MAVlink */
 // MavLink Custom parameters
@@ -207,9 +217,25 @@ void handleIncomingDrifterRFM(const char* rfmessage){
   }
 }
 
-// void sendcommand(){
-//   break; //FLAG [WIP] send drifter a command (like setting program status or flashing a light)
-// }
+void sendDrifterCommand(uint8_t drifterId, uint8_t command, uint32_t data = 0) {
+    RFMbuf payload;
+    payload.command = command;
+    payload.data = data;
+    
+    Serial.print("Sending command ");
+    Serial.print(command);
+    Serial.print(" to drifter ");
+    Serial.println(drifterId);
+    
+    if (USEACK) {
+        if (radio.sendWithRetry(drifterId, (const void*)(&payload), sizeof(RFMbuf)))
+            Serial.println("Command ACK received!");
+        else
+            Serial.println("No ACK received");
+    } else {
+        radio.send(drifterId, (const void*)(&payload), sizeof(RFMbuf));
+    }
+}
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
  *                                MavLink Functions
@@ -438,129 +464,28 @@ void loop()
 
   // SENDING (all serial input is written to buffer.  CR or >61 char will send the data)
   if (Serial.available() > 0){
-    // char input = Serial.read();
-    // if (input != '\r'){ // not a carriage return
-    //   sendbuffer[sendlength] = input;
-    //   sendlength++;
-    // }    
-
-    // if ((input == '\r') || (sendlength == 61 || input ==';')){ // CR or buffer full
-    //   // Send the packet!
-    //   Serial.print("sending to node ");
-    //   Serial.print(TONODEID, DEC);
-    //   Serial.print(": [");
-    //   for (byte i = 0; i < sendlength; i++)
-    //     Serial.print(sendbuffer[i]);
-    //   Serial.println("]");
-      
-    //   if (USEACK){
-    //     if (radio.sendWithRetry(TONODEID, sendbuffer, sendlength, 10))
-    //       Serial.println("ACK received!");
-    //     else
-    //       Serial.println("no ACK received :(");
-    //   } else { // don't use ACK
-    //     radio.send(TONODEID, sendbuffer, sendlength);
-    //   }
-    //   sendlength = 0; // reset the packet
-    // }
-
-    //FLAG: TEMPORARY RECOVER MODE DEMO
     char input = Serial.read();
-    if (input == 'R'){ // not a carriage return
-      sendbuffer[sendlength] = '5';
-      sendlength++;
-    }  
-
-          // Send the packet!
-      Serial.print("sending to node ");
-      Serial.print(TONODEID, DEC);
-      Serial.print(": [");
-      for (byte i = 0; i < sendlength; i++)
-        Serial.print(sendbuffer[i]);
-      Serial.println("]");
-      
-      if (USEACK){
-        if (radio.sendWithRetry(TONODEID, sendbuffer, sendlength, 10))
-          Serial.println("ACK received!");
-        else
-          Serial.println("no ACK received :(");
-      } else { // don't use ACK
-        radio.send(TONODEID, sendbuffer, sendlength);
-      }
-      sendlength = 0; // reset the packet
+    
+    switch(input) {
+      case 'L': // LOG mode
+        sendDrifterCommand(TONODEID, CMD_MODE_LOG);
+        break;
+      // case 'R': //WIP RECOVERY mode
+      //   sendDrifterCommand(TONODEID, CMD_MODE_RECOVERY);
+      //   break;
+      case 'S': // SLEEP mode
+        sendDrifterCommand(TONODEID, CMD_MODE_SLEEP, 30); // Sleep for 30 seconds
+        break;
+      case 'O': // OFF mode
+        sendDrifterCommand(TONODEID, CMD_MODE_OFF);
+        break;
+      default:
+        break;
+    }
   }
 
   if (radio.receiveDone()) { // If we receive data
     Serial.println("reading incoming data");
     handleIncomingDrifterRFM((const char*)radio.DATA);
   }
-
-  // // RECEIVING
-  // if (radio.receiveDone()) // Got one!
-  // {    
-  //   Serial.print("(Drifter ");
-  //   Serial.print(radio.SENDERID, DEC);
-  //   Serial.print("): [");
-    
-  //   for (byte i = 0; i < radio.DATALEN; i++)
-  //     Serial.print((char)radio.DATA[i]);
-          
-  //   Serial.print("], RSSI ");
-  //   Serial.println(radio.RSSI);
-    
-  //   if (radio.ACKRequested())
-  //   {
-  //     radio.sendACK();
-  //     Serial.println("ACK sent");
-  //   }
-  // }
-  
-}
-
-// Define command types
-struct RFMbuf {
-    uint8_t command;    // Command type
-    uint8_t data[61];   // Additional data if needed
-};
-
-// Command definitions
-#define CMD_MODE_STARTUP   1
-#define CMD_MODE_LOGGING   2
-#define CMD_MODE_RECOVERY  3
-#define CMD_MODE_OFF       4
-
-void sendDrifterCommand(uint8_t drifterId, uint8_t command) {
-    RFMbuf payload;
-    payload.command = command;
-    
-    if (radio.sendWithRetry(drifterId, (const void*)(&payload), sizeof(uint8_t))) {
-        Serial.println("Command sent successfully");
-    } else {
-        Serial.println("Failed to send command");
-    }
-}
-
-// Example usage in your command processing:
-void processSerialCommand(char* cmd) {
-    // ... existing code ...
-    
-    // Format: "MODE,drifterID,mode"
-    // Example: "MODE,2,LOG" to set drifter 2 to logging mode
-    if (strncmp(cmd, "MODE,", 5) == 0) {
-        char* ptr = cmd + 5;
-        uint8_t drifterId = atoi(ptr);
-        
-        ptr = strchr(ptr, ',');
-        if (ptr != NULL) {
-            ptr++;
-            uint8_t cmdType;
-            if (strcmp(ptr, "STR") == 0) cmdType = CMD_MODE_STARTUP;
-            else if (strcmp(ptr, "LOG") == 0) cmdType = CMD_MODE_LOGGING;
-            else if (strcmp(ptr, "REC") == 0) cmdType = CMD_MODE_RECOVERY;
-            else if (strcmp(ptr, "OFF") == 0) cmdType = CMD_MODE_OFF;
-            else return;
-            
-            sendDrifterCommand(drifterId, cmdType);
-        }
-    }
 }
