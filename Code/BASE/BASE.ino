@@ -27,6 +27,8 @@
 #include <SPI.h>
 #include "c_library_v2/common/mavlink.h"
 
+bool debug = true; //DEBUG: TRUE enables Serial messages and extra data.
+
 struct DrifterData{ // Data to capture from each Drifter RFM signal
   uint8_t drifterID;
   int32_t lat;
@@ -71,15 +73,16 @@ RFM69 radio(MY_RF69_SPI_CS,MY_RF69_IRQ_PIN);
 #endif
 
 // Define command types
-#define CMD_MODE_LOG    1
-#define CMD_MODE_RECOVERY 2
-#define CMD_MODE_SLEEP  3
-#define CMD_MODE_OFF    4
+  #define CMD_MODE_MSG    0
+  #define CMD_MODE_LOG    1
+  #define CMD_MODE_RECOVERY 2
+  #define CMD_MODE_SLEEP  3
+  #define CMD_MODE_OFF    4
 
-struct RFMbuf { // Structure for sending commands
-    uint8_t command;    // Command type (1-4)
-    uint32_t data;      // Data (e.g., sleep duration in seconds)
-};
+struct __attribute__((packed)) RFMbuf {
+    uint8_t command;    // 1 byte
+    uint32_t data;      // 4 bytes
+};  // Now guaranteed to be 5 bytes
 
 /* MAVlink */
 // MavLink Custom parameters
@@ -222,10 +225,26 @@ void sendDrifterCommand(uint8_t drifterId, uint8_t command, uint32_t data = 0) {
     payload.command = command;
     payload.data = data;
     
-    Serial.print("Sending command ");
-    Serial.print(command);
-    Serial.print(" to drifter ");
-    Serial.println(drifterId);
+    if(debug) {
+        Serial.println();
+        Serial.println();
+        Serial.println();
+        Serial.print("Sending command buffer size: ");
+        Serial.println(sizeof(RFMbuf));
+        Serial.print("Command: ");
+        Serial.println(payload.command);
+        Serial.print("Data: ");
+        Serial.println(payload.data);
+        
+        // Print raw bytes being sent
+        Serial.println("Raw bytes being sent:");
+        uint8_t* bytes = (uint8_t*)&payload;
+        for(uint8_t i = 0; i < sizeof(RFMbuf); i++) {
+            Serial.print(bytes[i], HEX);
+            Serial.print(" ");
+        }
+        Serial.println();
+    }
     
     if (USEACK) {
         if (radio.sendWithRetry(drifterId, (const void*)(&payload), sizeof(RFMbuf)))
@@ -462,7 +481,7 @@ void loop()
   // Check reception buffer
   decode_messages(); //FLAG this function "bangs" on the serial door quite often.  
 
-  // SENDING (all serial input is written to buffer.  CR or >61 char will send the data)
+  // SENDING (all serial input is written to buffer)
   if (Serial.available() > 0){
     char input = Serial.read();
     
