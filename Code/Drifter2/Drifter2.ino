@@ -10,7 +10,7 @@
   - Sparkfun RFM69HCW Wireless Transceiver - 915MHz (SPI)
   - Pololu MicroSD breakout board (SPI)
 */
-#define DRIFTER2_VERSION "1.13"
+#define DRIFTER2_VERSION "1.14"
 #include <SPI.h>
 #include <SD.h>
 #include <Wire.h>
