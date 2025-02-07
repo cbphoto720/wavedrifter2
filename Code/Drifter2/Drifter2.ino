@@ -120,7 +120,7 @@ const int BUZZ_pin = 1; // Buzzer
 
   // optional configs
   #define USEACK        true // Request ACKs or not
-  #define ENABLE_ATC  //comment out this line to disable AUTO TRANSMISSION CONTROL
+  // #define ENABLE_ATC  //comment out this line to disable AUTO TRANSMISSION CONTROL
   #define ATC_RSSI -80
 
   #ifdef ENABLE_ATC
