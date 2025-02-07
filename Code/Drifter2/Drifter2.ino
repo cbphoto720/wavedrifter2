@@ -17,7 +17,7 @@
 #include <elapsedMillis.h> //Flag remove extraneous libraries.  just do the math it is probably just as fast
 
 bool debug = true; //DEBUG: TRUE enables Serial messages and extra data.
-bool silent_start = false; // Disable buzzer on startup
+bool silent_start = true; // Disable buzzer on startup
 #define PIMARONI // Define IMU
 #define SparkfunGPS // Define GPS
 #define SparkfunRFM // Define RFM
@@ -36,7 +36,7 @@ unsigned long currentTime = 0;
 const unsigned int IMU_UPDATE = 40; //ms //default 40ms
 unsigned long lastTime_IMU = 0;
 elapsedMillis sinceIMU;
-const unsigned int GPS_UPDATE = 250; //ms //default 250ms
+const unsigned int GPS_UPDATE = 250; //ms //default 250ms //WIP GPS BINARIES LOCK IN 250ms.  Must modify to accommodate other options.
 unsigned long lastTime_GPS = 0;
 elapsedMillis sinceGPS;
 const unsigned int RFM_UPDATE= 2000; //ms //default 8000ms
@@ -106,15 +106,19 @@ const int BUZZ_pin = 1; // Buzzer
   #define FREQUENCY     RF69_915MHZ
   #define ENCRYPTKEY    "FILEDCREW1234567" // Use the same 16-byte key on all nodes
 
-  struct __attribute__((packed)) RFMbuf{ // Structure for incoming commands
-    uint8_t command;    // Command type (0-4)
-    uint32_t data;      // Data (e.g., sleep duration in seconds)
-  };
+  struct __attribute__((packed)) RFMpayload {
+      uint8_t command;    // 1 byte
+      uint32_t data;      // 4 bytes
+  };  // Now guaranteed to be 5 bytes
+  RFMpayload RFMbuffer;
+  //  Define command types
   #define CMD_MODE_MSG    0
   #define CMD_MODE_LOG    1
   #define CMD_MODE_RECOVERY 2
   #define CMD_MODE_SLEEP  3
   #define CMD_MODE_OFF    4
+  #define CMD_MODE_UNKNOWN 255 //WIP?  We don't need to purposefully send this command.  But it exists on the drifter.
+
   // optional configs
   #define USEACK        true // Request ACKs or not
   #define ENABLE_ATC  //comment out this line to disable AUTO TRANSMISSION CONTROL
@@ -423,7 +427,7 @@ void initGPS(){
 }
 
 void printRAWX(UBX_RXM_RAWX_data_t rawxData){
-  if(debug){ // print RAWX recieved
+  if(debug){ // print RAWX received
     Serial.print(F("\r\nRAWX: Length: "));
     Serial.print(rawxData.header.numMeas); 
   }
@@ -632,7 +636,7 @@ void initRFM(){
     }
   }
   radio.setHighPower(); //always set high power for HCW varient
-  radio.encrypt(ENCRYPTKEY);
+  radio.encrypt(ENCRYPTKEY); 
 
   #ifdef ENABLE_ATC
     radio.enableAutoPower(ATC_RSSI);
@@ -803,9 +807,72 @@ void startupSound(){
     delay(350);
     noTone(BUZZ_pin);
   }
-  // digitalWrite(LED_pin, LOW); // For indicator LED
-  analogWrite(recoveryLED_pin, 0); // Set recovery LED to off **Very important**
+  else{
+    delay(100);
+    analogWrite(recoveryLED_pin, 0);
+    delay(100);
+    analogWrite(recoveryLED_pin, runtimeLEDpower);
+    delay(100);
+    analogWrite(recoveryLED_pin, 0);
+    delay(325);
+    analogWrite(recoveryLED_pin, runtimeLEDpower);
+    delay(350);
+  }
+  analogWrite(recoveryLED_pin, 0);
+  noTone(BUZZ_pin);
 }
+
+
+void handleCommand(uint8_t command, uint32_t data = 0) {
+  switch(command) {
+          case CMD_MODE_MSG:
+          if(debug) Serial.println("MSG RECIEVED");
+            break;
+
+          case CMD_MODE_LOG:
+            if(debug) Serial.println("Executing LOG command");
+            strcpy(DRIFTER_STATUS, "LOG");
+
+            restartDrifter();
+            break;
+            
+          case CMD_MODE_RECOVERY: //WIP 
+            strcpy(DRIFTER_STATUS, "REC");
+            // Placeholder for recovery mode.  Put these statements in a loop & modify sensor output
+
+            // analogWrite(recoveryLED_pin, 200);  // 80% brightness recovery LED
+            // tone(BUZZ_pin, 1000);              // Start buzzer with 1kHz tone
+            // delay(250);                        // Wait for 250ms
+            // analogWrite(recoveryLED_pin, 0);   // Turn off recovery LED
+
+            // noTone(BUZZ_pin);                  // Stop buzzer
+            // delay(750);                        // Wait for 750ms (rest of 1 second)
+            break;
+            
+          case CMD_MODE_SLEEP: //WIP
+            strcpy(DRIFTER_STATUS, "SLP");
+            sleepdrifter();
+            
+            // Sleep for specified duration from data field
+            for (uint32_t i = 0; i < data; i++) {
+                delay(1000); // Sleep for 1 second intervals
+            }
+
+            #ifdef PIMARONI
+                myIMU.sleep(false);  // Wake up IMU
+                if (debug) {Serial.println("IMU waking up from sleep mode.");}
+            #endif
+            restartDrifter();
+            break;
+            
+          case CMD_MODE_OFF:
+            strcpy(DRIFTER_STATUS, "OFF");
+            Serial.println("Shutting down...");
+            sleepdrifter();
+            Serial.println("FINISHED SHUTDOWN");
+            break;
+        }
+} 
 
 void sleepdrifter() {
   //WIP
@@ -827,9 +894,9 @@ void sleepdrifter() {
   #endif
   #ifdef SparkfunRFM
     radio.sleep();
-    // Optionally, add a debug message to confirm shutdown
     if (debug) {Serial.println("RFM69 is in low power mode");}
   #endif
+  if (debug) { Serial.println("DRIFTER SHUTDOWN"); }
 }
 
 void restartDrifter(){
@@ -918,225 +985,122 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
   currentTime = millis();
-  if((currentTime - lastTime_System)>=SYSTEM_UPDATE){
-    if(debug){
-      VOLTAGE= readBatteryVoltage(1);
-      Serial.print("Voltage: ");
-      Serial.println(VOLTAGE);
-    }
-    lastTime_System=currentTime;
-  }
 
-  #ifdef SparkfunGPS
-    if ((sinceGPS)>=GPS_UPDATE) {
-      myGNSS.checkUblox(); // Check for the arrival of new data and process it.
-      myGNSS.checkCallbacks(); // Check if any callbacks are waiting to be processed.
-      // lastTime_GPS = currentTime;
-      sinceGPS= sinceGPS - GPS_UPDATE;
-    }
-  #endif
-
-  #ifdef PIMARONI
-    if ((sinceIMU)>=IMU_UPDATE) {
-      // gatherIMUdata(currentTime);
-      bufferIMUData(currentTime);
-      sinceIMU = sinceIMU - IMU_UPDATE;
-      // Serial.print("IN IMU UPDATE time: ");   Serial.println(currentTime);
-    }
-  #endif
-
-    // Send an RFM message to Base
-  #ifdef SparkfunRFM
-    if((currentTime - lastTime_RFM)>=RFM_UPDATE){
-      int len = snprintf(sendbuffer,sendbuffer_size,"%s,%ld,%ld,%lu,%.2fV", DRIFTER_STATUS, lastlatitude, lastlongitude, (unsigned long)sinceUTC , VOLTAGE);
-      
-      if (len < 0) {
-        if(debug) {Serial.println("ERROR: RFM broadcast message encoding failed");}
-        return;
+  if (strcmp(DRIFTER_STATUS, "OFF") != 0) {
+    if((currentTime - lastTime_System)>=SYSTEM_UPDATE){
+      if(debug){
+        VOLTAGE= readBatteryVoltage(1);
+        Serial.print("Voltage: ");
+        Serial.println(VOLTAGE);
       }
-      if (len >= sendbuffer_size) {
-        if(debug) {Serial.println("WARNING: RFM broadcast message truncated");}
-      }
+      lastTime_System=currentTime;
+    }
 
-      if (USEACK){
-        if (radio.sendWithRetry(BASEID, sendbuffer, len < sendbuffer_size ? len : sendbuffer_size-1))
-          if(debug) {Serial.println("SUCCESS: message sent to base");}
-        else
-          if(debug) {Serial.println("ERROR: unable to reach Base");}
+    #ifdef SparkfunGPS
+      if ((sinceGPS)>=GPS_UPDATE) {
+        myGNSS.checkUblox(); // Check for the arrival of new data and process it.
+        myGNSS.checkCallbacks(); // Check if any callbacks are waiting to be processed.
+        // lastTime_GPS = currentTime;
+        sinceGPS= sinceGPS - GPS_UPDATE;
+      }
+    #endif
+
+    #ifdef PIMARONI
+      if ((sinceIMU)>=IMU_UPDATE) {
+        // gatherIMUdata(currentTime);
+        bufferIMUData(currentTime);
+        sinceIMU = sinceIMU - IMU_UPDATE;
+        // Serial.print("IN IMU UPDATE time: ");   Serial.println(currentTime);
+      }
+    #endif
+
+      // Send an RFM message to Base
+    #ifdef SparkfunRFM
+      if((currentTime - lastTime_RFM)>=RFM_UPDATE){
+        int len = snprintf(sendbuffer,sendbuffer_size,"%s,%ld,%ld,%lu,%.2fV", DRIFTER_STATUS, lastlatitude, lastlongitude, (unsigned long)sinceUTC , VOLTAGE);
+        
+        if (len < 0) {
+          if(debug) {Serial.println("ERROR: RFM broadcast message encoding failed");}
+          return;
+        }
+        if (len >= sendbuffer_size) {
+          if(debug) {Serial.println("WARNING: RFM broadcast message truncated");}
+        }
+
+        if (USEACK){
+          if (radio.sendWithRetry(BASEID, sendbuffer, len < sendbuffer_size ? len : sendbuffer_size-1))
+            if(debug) {Serial.println("SUCCESS: message sent to base");}
+          else
+            if(debug) {Serial.println("ERROR: unable to reach Base");}
+        }
+        else{
+          radio.send(BASEID, sendbuffer, len < sendbuffer_size ? len : sendbuffer_size-1);
+        }
+        lastTime_RFM = currentTime;
+      }
+    #endif
+
+    // Receive commands via RFM
+      #ifdef SparkfunRFM
+      if (radio.receiveDone()) {
+      if (radio.DATALEN != sizeof(RFMbuffer)) {
+        if(debug) {
+          Serial.print("ERROR: DATALEN (");
+          Serial.print(radio.DATALEN);
+          Serial.print(") does not match sizeof(RFMpayload) (");
+          Serial.print(sizeof(RFMpayload));
+          Serial.println(")");
+        }
       }
       else{
-        radio.send(BASEID, sendbuffer, len < sendbuffer_size ? len : sendbuffer_size-1);
+        RFMbuffer = *(RFMpayload*)radio.DATA;  // Copy the received data to RFMbuffer before sending ack
       }
-      lastTime_RFM = currentTime;
-    }
-  #endif
 
-  // Receive commands via RFM
-  #ifdef SparkfunRFM
-  if (radio.receiveDone()) {
       // Send acknowledgment back to base if needed
       if (radio.ACKRequested()) {
         radio.sendACK();
       }
 
-      if(debug) {
-        Serial.println();
-        Serial.println();
-        Serial.println();
-        Serial.println();
-        Serial.println("[RFM] MESSAGE RECEIVED");
-        Serial.println();
-        Serial.print("Received data length: ");
-        Serial.print(radio.DATALEN);
-        Serial.print(", Expected RFMbuf size: ");
-        Serial.println(sizeof(RFMbuf));
-        
-        // Print raw received bytes
-        Serial.println("Raw received bytes:");
-        for(uint8_t i = 0; i < radio.DATALEN; i++) {
-          Serial.print(((uint8_t*)radio.DATA)[i], HEX);
-          Serial.print(" ");
-        }
-        Serial.println();
+      handleCommand(RFMbuffer.command, RFMbuffer.data);
       }
-
-    if (radio.DATALEN >= sizeof(RFMbuf)) {
-      RFMbuf* receivedData = (RFMbuf*)radio.DATA;
-      switch(receivedData->command) {
-        case CMD_MODE_MSG:
-          break;
-
-        case CMD_MODE_LOG:
-          strcpy(DRIFTER_STATUS, "LOG");
-
-          #ifdef PIMARONI
-            myIMU.sleep(false);  // Wake up IMU
-            if (debug) {Serial.println("IMU waking up from sleep mode.");}
-          #endif
-          restartDrifter();
-          break;
-          
-        case CMD_MODE_RECOVERY:
-          //WIP 
-          strcpy(DRIFTER_STATUS, "REC");
-          // Placeholder for recovery mode.  Put these statements in a loop & modify sensor output
-
-          // analogWrite(recoveryLED_pin, 200);  // 80% brightness recovery LED
-          // tone(BUZZ_pin, 1000);              // Start buzzer with 1kHz tone
-          // delay(250);                        // Wait for 250ms
-          // analogWrite(recoveryLED_pin, 0);   // Turn off recovery LED
-
-          // noTone(BUZZ_pin);                  // Stop buzzer
-          // delay(750);                        // Wait for 750ms (rest of 1 second)
-          break;
-          
-        case CMD_MODE_SLEEP:
-          strcpy(DRIFTER_STATUS, "SLP");
-          Serial.println("Shutting down...");
-          sleepdrifter();
-          Serial.println("FINISHED SHUTDOWN");
-          delay(1000);
-          
-          // Sleep for specified duration from data field
-          for (uint32_t i = 0; i < receivedData->data; i++) {
-              delay(1000); // Sleep for 1 second intervals
-          }
-
-          // Resume logging after sleep
-          //WIP
-          #ifdef PIMARONI
-              myIMU.sleep(false);  // Wake up IMU
-              if (debug) {Serial.println("IMU waking up from sleep mode.");}
-          #endif
-          restartDrifter();
-          break;
-          
-        case CMD_MODE_OFF:
-          strcpy(DRIFTER_STATUS, "OFF");
-          Serial.println("Shutting down...");
-          sleepdrifter();
-          Serial.println("FINISHED SHUTDOWN");
-          break;
-      }
-    }
+    #endif
   }
-#endif
-
-// if (Serial.available() > 0) {
-//     char input = Serial.read();
-//     // Check if the input is a carriage return (end of the command)
-//     Serial.println();
-//     Serial.println();
-//     Serial.println("Reading Serial line");
-//     Serial.println();
-//     Serial.println();
-//     if (input == '\r') {
-//       commandBuffer[commandIndex] = '\0';  // Null-terminate the command string
-//       switch(input){
-//         case 'O':
-//           strcpy(DRIFTER_STATUS, "OFF");
-//           Serial.println("Shutting down...");
-//           sleepdrifter();
-//           Serial.println("FINISHED SHUTDOWN");
-//           break;
-//         default:
-//           break;
-//       }
-//     }
-// }
-
-// FLAG work in progress -send drifter commands through serial terminal
-  // if (Serial.available() > 0) {
-  //   char input = Serial.read();
-  //   // Check if the input is a carriage return (end of the command)
-  //   if (input == '\r') {
-  //     commandBuffer[commandIndex] = '\0';  // Null-terminate the command string
-  //     // Compare the command with known commands
-  //     if (strcmp(commandBuffer, "shutdown") == 0) {
-  //       if (debug) { Serial.println("Shutting down..."); }
-  //       #ifdef PoluluSD
-  //         flushRemainingIMUData();
-  //       #endif
-  //       #ifdef PIMARONI  // Put the IMU into low-power mode
-  //         myIMU.sleep(true);  // Enable sleep mode
-  //         myIMU.enableCycle(false); // Disable cycle mode to ensure full sleep
-  //         if (debug) {Serial.println("IMU is in low power mode.");}
-  //       #endif
-  //       #ifdef SparkfunGPS
-  //         uint8_t UBXdataToSend[] = {
-  //           0xB5, 0x62, 0x06, 0x04, 0x04, 0x00, 0x00, 0x00, 0x08, 0x00, 0x16, 0x74 //Stop GNSS with Hotstart option
-  //         };
-  //         GPSbinaryWrite(UBXdataToSend, sizeof(UBXdataToSend));
-  //         if (debug) {Serial.println("GPS is in low power mode");}
-  //       #endif
-  //       #ifdef SparkfunRFM
-  //         radio.sleep();
-  //         // Optionally, add a debug message to confirm shutdown
-  //         if (debug) {Serial.println("RFM69 is in low power mode");}
-  //       #endif
-
-  //       //FLAG do other shutdown steps (low power GPS)
-  //       if (debug) { Serial.println("FINISHED SHUTDOWN"); }
-  //         strcpy(DRIFTER_STATUS, "OFF");
-  //         while(1); // is this the best way to handle shutdown?  what about setting update rates to maxval?
-  //     }
-  //     else if (strcmp(commandBuffer, "recovery") == 0) {
-  //       // Handle recovery command
-  //     }
-  //     else if (strcmp(commandBuffer, "normal") == 0) {
-  //       // Handle normal mode command
-  //       // set IMU_UPDATE back to normal 
-  //     }
-  //     else {
-  //       Serial.println("Unknown command: ignore input");
-  //     }
-  //       // Reset the command buffer and index
-  //       commandIndex = 0;
-  //       memset(commandBuffer, '\0', sizeof(commandBuffer));
-  //   } 
-  //   // Otherwise, store the character in the command buffer
-  //   else if (commandIndex < MAX_COMMAND_LENGTH - 1) {
-  //     commandBuffer[commandIndex++] = input;
-  //   }
-  // }
+  else{
+    //WIP
+    /*
+    -implement low power mode for teensy deep sleep
+    -Move this if statment if you find a way to receive RFM commands while in deep sleep
+    -Try Tx mode with RFM because you never know when the base will request a command
+          - This is the best use case for IMU-defined wake from sleep (wave detection for listening mode vs sleep)
+    */
+  }
+  
+  if (Serial.available() > 0) {
+  char input = Serial.read();
+  uint8_t command = CMD_MODE_UNKNOWN;
+  if(debug) {
+        Serial.println();
+        Serial.println("[SERIAL] MESSAGE RECEIVED");
+        Serial.print("Command: ");
+        Serial.println(input);
+  }
+  switch(input) {
+    case 'L':
+      command = CMD_MODE_LOG;
+      break;
+    case 'R':
+      command = CMD_MODE_RECOVERY;
+      break;
+    case 'S':
+      command = CMD_MODE_SLEEP;
+      break;
+    case 'O':
+      command = CMD_MODE_OFF;
+      break;
+    default:
+      if(debug) Serial.println("Unknown command");
+      return;
+  }
+  handleCommand(command);
+  }
 }

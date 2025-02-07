@@ -62,7 +62,7 @@ uint32_t lastTime_heartbeat = 0; //FLAG should this be an unsigned long?
 #define ENCRYPT       true // Set to "true" to use encryption
 #define ENCRYPTKEY    "FILEDCREW1234567" // Use the same 16-byte key on all nodes
 #define USEACK        true // Request ACKs or not
-#define ENABLE_ATC  //comment out this line to disable AUTO TRANSMISSION CONTROL
+// #define ENABLE_ATC  //comment out this line to disable AUTO TRANSMISSION CONTROL
 #define ATC_RSSI -80 // Target RSSI for automatic transmission power
 
 // Create a library object for our RFM69HCW module:
@@ -72,17 +72,18 @@ RFM69_ATC radio(MY_RF69_SPI_CS,MY_RF69_IRQ_PIN);
 RFM69 radio(MY_RF69_SPI_CS,MY_RF69_IRQ_PIN);
 #endif
 
-// Define command types
+struct __attribute__((packed)) RFMpayload {
+      uint8_t command;    // 1 byte
+      uint32_t data;      // 4 bytes
+  };  // Now guaranteed to be 5 bytes
+  RFMpayload RFMbuffer;
+  //  Define command types
   #define CMD_MODE_MSG    0
   #define CMD_MODE_LOG    1
   #define CMD_MODE_RECOVERY 2
   #define CMD_MODE_SLEEP  3
   #define CMD_MODE_OFF    4
-
-struct __attribute__((packed)) RFMbuf {
-    uint8_t command;    // 1 byte
-    uint32_t data;      // 4 bytes
-};  // Now guaranteed to be 5 bytes
+  #define CMD_MODE_UNKNOWN 255 //WIP?  We don't need to purposefully send this command.  But it exists on the drifter.
 
 /* MAVlink */
 // MavLink Custom parameters
@@ -221,25 +222,26 @@ void handleIncomingDrifterRFM(const char* rfmessage){
 }
 
 void sendDrifterCommand(uint8_t drifterId, uint8_t command, uint32_t data = 0) {
-    RFMbuf payload;
-    payload.command = command;
-    payload.data = data;
+    RFMbuffer.command = command;
+    RFMbuffer.data = data;
     
     if(debug) {
         Serial.println();
         Serial.println();
         Serial.println();
-        Serial.print("Sending command buffer size: ");
-        Serial.println(sizeof(RFMbuf));
+        Serial.print("Size of RFMpayload: ");
+        Serial.println(sizeof(RFMpayload));
+        Serial.print("Size of sending data: ");
+        Serial.println(sizeof(RFMbuffer));
         Serial.print("Command: ");
-        Serial.println(payload.command);
+        Serial.println(RFMbuffer.command);
         Serial.print("Data: ");
-        Serial.println(payload.data);
+        Serial.println(RFMbuffer.data);
         
         // Print raw bytes being sent
         Serial.println("Raw bytes being sent:");
-        uint8_t* bytes = (uint8_t*)&payload;
-        for(uint8_t i = 0; i < sizeof(RFMbuf); i++) {
+        uint8_t* bytes = (uint8_t*)&RFMbuffer;
+        for(uint8_t i = 0; i < sizeof(RFMpayload); i++) {
             Serial.print(bytes[i], HEX);
             Serial.print(" ");
         }
@@ -247,12 +249,12 @@ void sendDrifterCommand(uint8_t drifterId, uint8_t command, uint32_t data = 0) {
     }
     
     if (USEACK) {
-        if (radio.sendWithRetry(drifterId, (const void*)(&payload), sizeof(RFMbuf)))
+        if (radio.sendWithRetry(drifterId, (const void*)(&RFMbuffer), sizeof(RFMpayload)))
             Serial.println("Command ACK received!");
         else
             Serial.println("No ACK received");
     } else {
-        radio.send(drifterId, (const void*)(&payload), sizeof(RFMbuf));
+        radio.send(drifterId, (const void*)(&RFMbuffer), sizeof(RFMpayload));
     }
 }
 
@@ -493,7 +495,7 @@ void loop()
       //   sendDrifterCommand(TONODEID, CMD_MODE_RECOVERY);
       //   break;
       case 'S': // SLEEP mode
-        sendDrifterCommand(TONODEID, CMD_MODE_SLEEP, 30); // Sleep for 30 seconds
+        sendDrifterCommand(TONODEID, CMD_MODE_SLEEP, 10); // Sleep for 10 seconds
         break;
       case 'O': // OFF mode
         sendDrifterCommand(TONODEID, CMD_MODE_OFF);
