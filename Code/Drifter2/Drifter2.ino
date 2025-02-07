@@ -364,7 +364,7 @@ void flushRemainingIMUData() {
 void initGPS(){
   // Configure Teensy pin as an interrupt
   pinMode(GPS_intteruptpin, INPUT);
-  // attachInterrupt(digitalPinToInterrupt(GPS_intteruptpin), txReadyISR, FALLING); //WIP
+  attachInterrupt(digitalPinToInterrupt(GPS_intteruptpin), txReadyISR, FALLING); //WIP
 
   if (!myGNSS.setPacketCfgPayloadSize(sizeof(NMEA_GPSbuffer) + RAWX_GPSbuffer)){
     Serial.println(F("ERROR: [GPS] setPacketCfgPayloadSize failed. You will not be able to poll RAWX data. Freezing."));
