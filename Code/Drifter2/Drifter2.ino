@@ -57,7 +57,6 @@ const int BUZZ_pin = 1; // Buzzer
 // FLAG [Drifter V2: const int BUZZ_pin = 15;]
 
 
-
 /* IMU Variables */
 #ifdef PIMARONI
   IntervalTimer IMUtimer;
@@ -919,6 +918,11 @@ void restartDrifter(){
   // Startup sound (data is ready to log)
   startupSound();
 
+  // if(debug){
+  //   sinceGPS=-125; //reset GPS timer
+
+  // }
+
   if(debug){delay(5000);}
   // Set all ellapsedMillis to allocate
   sinceIMU=0; 
@@ -985,7 +989,7 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
   currentTime = millis();
-
+  
   if (strcmp(DRIFTER_STATUS, "OFF") != 0) {
     if((currentTime - lastTime_System)>=SYSTEM_UPDATE){
       if(debug){
