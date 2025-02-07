@@ -27,6 +27,8 @@
 #include <SPI.h>
 #include "c_library_v2/common/mavlink.h"
 
+bool debug = true; //DEBUG: TRUE enables Serial messages and extra data.
+
 struct DrifterData{ // Data to capture from each Drifter RFM signal
   uint8_t drifterID;
   int32_t lat;
@@ -60,7 +62,7 @@ uint32_t lastTime_heartbeat = 0; //FLAG should this be an unsigned long?
 #define ENCRYPT       true // Set to "true" to use encryption
 #define ENCRYPTKEY    "FILEDCREW1234567" // Use the same 16-byte key on all nodes
 #define USEACK        true // Request ACKs or not
-#define ENABLE_ATC  //comment out this line to disable AUTO TRANSMISSION CONTROL
+// #define ENABLE_ATC  //comment out this line to disable AUTO TRANSMISSION CONTROL
 #define ATC_RSSI -80 // Target RSSI for automatic transmission power
 
 // Create a library object for our RFM69HCW module:
@@ -70,6 +72,18 @@ RFM69_ATC radio(MY_RF69_SPI_CS,MY_RF69_IRQ_PIN);
 RFM69 radio(MY_RF69_SPI_CS,MY_RF69_IRQ_PIN);
 #endif
 
+struct __attribute__((packed)) RFMpayload {
+      uint8_t command;    // 1 byte
+      uint32_t data;      // 4 bytes
+  };  // Now guaranteed to be 5 bytes
+  RFMpayload RFMbuffer;
+  //  Define command types
+  #define CMD_MODE_MSG    0
+  #define CMD_MODE_LOG    1
+  #define CMD_MODE_RECOVERY 2
+  #define CMD_MODE_SLEEP  3
+  #define CMD_MODE_OFF    4
+  #define CMD_MODE_UNKNOWN 255 //WIP?  We don't need to purposefully send this command.  But it exists on the drifter.
 
 /* MAVlink */
 // MavLink Custom parameters
@@ -207,9 +221,42 @@ void handleIncomingDrifterRFM(const char* rfmessage){
   }
 }
 
-// void sendcommand(){
-//   break; //FLAG [WIP] send drifter a command (like setting program status or flashing a light)
-// }
+void sendDrifterCommand(uint8_t drifterId, uint8_t command, uint32_t data = 0) {
+    RFMbuffer.command = command;
+    RFMbuffer.data = data;
+    
+    if(debug) {
+        Serial.println();
+        Serial.println();
+        Serial.println();
+        Serial.print("Size of RFMpayload: ");
+        Serial.println(sizeof(RFMpayload));
+        Serial.print("Size of sending data: ");
+        Serial.println(sizeof(RFMbuffer));
+        Serial.print("Command: ");
+        Serial.println(RFMbuffer.command);
+        Serial.print("Data: ");
+        Serial.println(RFMbuffer.data);
+        
+        // Print raw bytes being sent
+        Serial.println("Raw bytes being sent:");
+        uint8_t* bytes = (uint8_t*)&RFMbuffer;
+        for(uint8_t i = 0; i < sizeof(RFMpayload); i++) {
+            Serial.print(bytes[i], HEX);
+            Serial.print(" ");
+        }
+        Serial.println();
+    }
+    
+    if (USEACK) {
+        if (radio.sendWithRetry(drifterId, (const void*)(&RFMbuffer), sizeof(RFMpayload)))
+            Serial.println("Command ACK received!");
+        else
+            Serial.println("No ACK received");
+    } else {
+        radio.send(drifterId, (const void*)(&RFMbuffer), sizeof(RFMpayload));
+    }
+}
 
 /*------------------ ------------------ ------------------ ------------------ ------------------
  *                                MavLink Functions
@@ -436,31 +483,25 @@ void loop()
   // Check reception buffer
   decode_messages(); //FLAG this function "bangs" on the serial door quite often.  
 
-  // SENDING (all serial input is written to buffer.  CR or >61 char will send the data)
+  // SENDING (all serial input is written to buffer)
   if (Serial.available() > 0){
     char input = Serial.read();
-    if (input != '\r'){ // not a carriage return
-      sendbuffer[sendlength] = input;
-      sendlength++;
-    }    
-    if ((input == '\r') || (sendlength == 61)){ // CR or buffer full
-      // Send the packet!
-      Serial.print("sending to node ");
-      Serial.print(TONODEID, DEC);
-      Serial.print(": [");
-      for (byte i = 0; i < sendlength; i++)
-        Serial.print(sendbuffer[i]);
-      Serial.println("]");
-      
-      if (USEACK){
-        if (radio.sendWithRetry(TONODEID, sendbuffer, sendlength, 10))
-          Serial.println("ACK received!");
-        else
-          Serial.println("no ACK received :(");
-      } else { // don't use ACK
-        radio.send(TONODEID, sendbuffer, sendlength);
-      }
-      sendlength = 0; // reset the packet
+    
+    switch(input) {
+      case 'L': // LOG mode
+        sendDrifterCommand(TONODEID, CMD_MODE_LOG);
+        break;
+      // case 'R': //WIP RECOVERY mode
+      //   sendDrifterCommand(TONODEID, CMD_MODE_RECOVERY);
+      //   break;
+      case 'S': // SLEEP mode
+        sendDrifterCommand(TONODEID, CMD_MODE_SLEEP, 10); // Sleep for 10 seconds
+        break;
+      case 'O': // OFF mode
+        sendDrifterCommand(TONODEID, CMD_MODE_OFF);
+        break;
+      default:
+        break;
     }
   }
 
@@ -468,25 +509,4 @@ void loop()
     Serial.println("reading incoming data");
     handleIncomingDrifterRFM((const char*)radio.DATA);
   }
-
-  // // RECEIVING
-  // if (radio.receiveDone()) // Got one!
-  // {    
-  //   Serial.print("(Drifter ");
-  //   Serial.print(radio.SENDERID, DEC);
-  //   Serial.print("): [");
-    
-  //   for (byte i = 0; i < radio.DATALEN; i++)
-  //     Serial.print((char)radio.DATA[i]);
-          
-  //   Serial.print("], RSSI ");
-  //   Serial.println(radio.RSSI);
-    
-  //   if (radio.ACKRequested())
-  //   {
-  //     radio.sendACK();
-  //     Serial.println("ACK sent");
-  //   }
-  // }
-  
 }
