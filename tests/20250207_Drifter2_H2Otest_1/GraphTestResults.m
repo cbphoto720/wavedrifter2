@@ -140,9 +140,11 @@ scalefactor=1.5;
 set(gcf, 'Position', [floor([10 150 900*scalefactor 750*scalefactor])]);
 
 % Add title and axis labels
-title('Drifter Broadcast Signal Strength in Freshwater (Low-Power mode, 15m away)'); % Title
-xlabel('RSSI (dBm)');   % X-axis label
-ylabel('Relative probability');    % Y-axis label (normalized frequency)
+fontsize=24;
+fontsize_axis=fontsize*0.85;
+title('Drifter Broadcast Signal Strength in Freshwater (Low-Power mode, 15m away)', 'FontSize', fontsize); % Title
+xlabel('RSSI (dBm)', 'FontSize', fontsize_axis);   % X-axis label
+ylabel('Relative probability', 'FontSize', fontsize_axis);    % Y-axis label (normalized frequency)
 
 % Add legend conditionally
 legendEntries = {};
@@ -161,7 +163,7 @@ end
 if includeUnderwater25
     legendEntries{end+1} = 'Underwater (-25mm)';
 end
-legend(legendEntries);
+legend(legendEntries, 'FontSize', fontsize_axis);
 
 hold off;  % Release the hold on the plot
 
