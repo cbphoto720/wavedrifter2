@@ -1,5 +1,5 @@
 close all; clear all; clc
-addpath(genpath('C:\Users\Cars\Documents\MATLAB\CPG\20250207_Drifter2_H2Otest_1'));
+addpath(genpath('C:\Users\Cars\Documents\GitHub\wavedrifter2\tests\20250207_Drifter2_H2Otest_1'));
 
 %%
 % read the cleaned file
@@ -140,7 +140,7 @@ scalefactor=1.5;
 set(gcf, 'Position', [floor([10 150 900*scalefactor 750*scalefactor])]);
 
 % Add title and axis labels
-title('Drifter Broadcast Signal Strength (Low-Power mode, 15m away)'); % Title
+title('Drifter Broadcast Signal Strength in Freshwater (Low-Power mode, 15m away)'); % Title
 xlabel('RSSI (dBm)');   % X-axis label
 ylabel('Relative probability');    % Y-axis label (normalized frequency)
 
