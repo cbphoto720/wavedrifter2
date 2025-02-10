@@ -1,0 +1,5 @@
+//--------- NEW START ---------//
+// Drifter number: 1, Battery: 3.91
+// IMU_update: 40 ms, GPS_update: 250 ms, Transciever_update: 2000 ms
+// Accel_range: 16G, Gyro_range: 2000 dps
+IMUtime, Ax, Ay, Az, Gx, Gy, Gz, Mx, My, Mz, P, T

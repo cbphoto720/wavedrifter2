@@ -1,0 +1,106 @@
+//--------- NEW START ---------//
+//Drifter number: 1, Battery: 4.01
+//$GPGGA,UTCtime,Latitude,N,Longitude,W,GPS_Quality,#SVs,HDOP,MSL_height,M(meters),Geoid-seperation,M(meters),Age_of_differentialGPS,Ref-StationID,*Checksum
+//rcvTow,week,leapS,numMeas,datablock#,prMes,cpMes,doMes,gnssId,svId,sigId,freqId,lockTime,cno,prStdev,cpStdev,doStdev,prValid,cpValid,halfCyc,subHalfCyc
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+6.020000,0,18,0
+logtimer: 14
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+7.020000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+7.270000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+7.520000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+7.770000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+8.020000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+9.020000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+9.270000,0,18,0
+logtimer: 14
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+9.520000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+9.770000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+10.020000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+10.270000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+10.520000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+10.770000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+11.020000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+11.270000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+11.520000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+11.770000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+12.020000,0,18,0
+logtimer: 14
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+13.020000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+13.270000,0,18,0
+logtimer: 14
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+13.520000,0,18,0
+logtimer: 14
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+13.770000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+14.020000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
+14.270000,0,18,0
+logtimer: 13
+$GNGGA,,,,,,0,00,99.99,,,,,,*56
+
